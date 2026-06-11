@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/harliv/projects/janus/engine/build/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
