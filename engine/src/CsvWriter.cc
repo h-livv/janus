@@ -8,7 +8,7 @@ namespace janus
 
 CsvWriter::CsvWriter()
 {
-    fOutFile.open("../../output/particle_tracks.csv");
+    fOutFile.open("../../temp/particle_tracks.csv");
 
     if (!fOutFile.is_open())
     {

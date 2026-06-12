@@ -5,6 +5,8 @@
 #define B1PrimaryGeneratorAction_h 1
 
 #include "G4VUserPrimaryGeneratorAction.hh"
+#include "globals.hh"
+#include "G4ThreeVector.hh" // Added for 3Vectors
 
 class G4ParticleGun;
 class G4Event;
@@ -13,10 +15,7 @@ class G4Box;
 namespace janus
 {
 
-/// The primary generator action class with particle gun.
-///
-/// The default kinematic is a 6 MeV gamma, randomly distribued
-/// in front of the phantom across 80% of the (X,Y) phantom size.
+class PrimaryGeneratorMessenger;
 
 class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
 {
@@ -24,15 +23,37 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     PrimaryGeneratorAction();
     ~PrimaryGeneratorAction() override;
 
-    // method from the base class
     void GeneratePrimaries(G4Event*) override;
 
-    // method to access particle gun
     const G4ParticleGun* GetParticleGun() const { return fParticleGun; }
 
+    // Setters for UI commands
+    void SetBeamRadius(G4double radius) { fBeamRadius = radius; }
+    void SetBeamSigma(G4double sigma) { fBeamSigma = sigma; }
+    void SetBeamDirection(G4ThreeVector dir) { fBeamDirection = dir.unit(); }
+    void SetBeamOffset(G4ThreeVector offset) { fBeamOffset = offset; }
+    void SetBeamProfile(G4String profile) { fBeamProfile = profile; }
+    void SetEnergyMean(G4double mean) { fEnergyMean = mean; }
+    void SetEnergySigma(G4double sigma) { fEnergySigma = sigma; }
+    void SetEnergyDistribution(G4String dist) { fEnergyDist = dist; }
+
   private:
-    G4ParticleGun* fParticleGun = nullptr;  // pointer a to G4 gun class
+    G4ParticleGun* fParticleGun = nullptr;
     G4Box* fEnvelopeBox = nullptr;
+
+    // Beam parameters
+    G4double fBeamRadius;
+    G4double fBeamSigma;
+    G4ThreeVector fBeamDirection;
+    G4ThreeVector fBeamOffset;
+    G4String fBeamProfile;
+
+    // Energy parameters
+    G4double fEnergyMean;
+    G4double fEnergySigma;
+    G4String fEnergyDist;
+
+    PrimaryGeneratorMessenger* fMessenger = nullptr;
 };
 
 }

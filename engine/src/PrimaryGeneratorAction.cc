@@ -2,6 +2,7 @@
 /// \brief Implementation of the janus::PrimaryGeneratorAction class
 
 #include "PrimaryGeneratorAction.hh"
+#include "PrimaryGeneratorMessenger.hh"
 
 #include "G4Box.hh"
 #include "G4LogicalVolume.hh"
@@ -16,90 +17,90 @@ namespace janus
 
 PrimaryGeneratorAction::PrimaryGeneratorAction()
 {
-  G4int n_particle = 1;
-  fParticleGun = new G4ParticleGun(n_particle);
+    G4int n_particle = 1;
+    fParticleGun = new G4ParticleGun(n_particle);
 
-  //Primary beam parameters
-  G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
-  G4String particleName;
-  G4ParticleDefinition* particle = particleTable->FindParticle(particleName = "proton");
-  fParticleGun->SetParticleDefinition(particle);
-  fParticleGun->SetParticleMomentumDirection(G4ThreeVector(0., 0., 1.));
-  fParticleGun->SetParticleEnergy(500. * GeV);
+    G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
+    G4ParticleDefinition* particle = particleTable->FindParticle("proton");
+    fParticleGun->SetParticleDefinition(particle);
+
+    // Initial Defaults
+    fBeamRadius = 1.0 * cm;
+    fBeamSigma = 0.5 * cm;
+    fBeamDirection = G4ThreeVector(0., 0., 1.);
+    fBeamOffset = G4ThreeVector(0., 0., 0.);
+    fBeamProfile = "Flat"; // "Flat", "Gaussian", or "Point"
+    
+    fEnergyMean = 500. * GeV;
+    fEnergySigma = 5. * GeV;
+    fEnergyDist = "Mono"; // "Mono" or "Gaussian"
+
+    fMessenger = new PrimaryGeneratorMessenger(this);
 }
 
 PrimaryGeneratorAction::~PrimaryGeneratorAction()
 {
-  delete fParticleGun;
+    delete fParticleGun;
+    delete fMessenger;
 }
 
 void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
 {
-  // this function is called at the begining of each event
-  //
+    G4double chamberSizeZ = 0;
+    G4Box* chamberBox = nullptr;
+    G4LogicalVolume* chamberLV = G4LogicalVolumeStore::GetInstance()->GetVolume("Chamber");
 
-  // In order to avoid dependence of janusprimarygenerator
-  // on janusdetectorconstr class we get chamber volume
-  // from G4LogicalVolumeStore.
+    if (chamberLV) {
+        chamberBox = dynamic_cast<G4Box*>(chamberLV->GetSolid());
+    }
 
-  G4double chamberSizeXY = 0;
-  G4double chamberSizeZ = 0;
+    if (!chamberBox) {
+        G4ExceptionDescription msg;
+        msg << "Chamber geometry not found.\nBeam origin fallback activated.";
+        G4Exception("PrimaryGeneratorAction::GeneratePrimaries()", "Janus001", JustWarning, msg);
+    } else {
+        chamberSizeZ = chamberBox->GetZHalfLength() * 2.;
+    }
 
-  G4Box* chamberBox = nullptr;
+    // --- 1. Position & Profile ---
+    G4double x0 = 0.;
+    G4double y0 = 0.;
+    G4double z0 = -0.5 * chamberSizeZ; // Base Z start
 
-  G4LogicalVolume* chamberLV
-    = G4LogicalVolumeStore::GetInstance()->GetVolume("Chamber");
+    if (fBeamProfile == "Flat") {
+        G4double r = fBeamRadius * std::sqrt(G4UniformRand());
+        G4double theta = CLHEP::twopi * G4UniformRand();
+        x0 = r * std::cos(theta);
+        y0 = r * std::sin(theta);
+    } 
+    else if (fBeamProfile == "Gaussian") {
+        x0 = G4RandGauss::shoot(0., fBeamSigma);
+        y0 = G4RandGauss::shoot(0., fBeamSigma);
+    }
+    // If "Point", x0 and y0 remain 0.
 
-if (chamberLV)
-{
-    chamberBox = dynamic_cast<G4Box*>(chamberLV->GetSolid());
-}
+    // Apply User Offset
+    x0 += fBeamOffset.x();
+    y0 += fBeamOffset.y();
+    z0 += fBeamOffset.z();
 
-if (!chamberBox)
-{
-    G4ExceptionDescription msg;
-    msg << "Chamber geometry not found.\n";
-    msg << "Beam origin fallback activated.";
+    fParticleGun->SetParticlePosition(G4ThreeVector(x0, y0, z0));
 
-    G4Exception(
-        "PrimaryGeneratorAction::GeneratePrimaries()",
-        "Janus001",
-        JustWarning,
-        msg
-    );
-}
+    // --- 2. Direction ---
+    fParticleGun->SetParticleMomentumDirection(fBeamDirection);
 
-if (chamberBox)
-{
-    chamberSizeXY = chamberBox->GetXHalfLength() * 2.;
-    chamberSizeZ  = chamberBox->GetZHalfLength() * 2.;
-}
-
-  else {
-    G4ExceptionDescription msg;
-    msg << "Chamber geometry not found.\n";
-    msg << "Beam origin fallback activated.\n";
-    msg << "Primary particles will be generated at world center.";
-    G4Exception("PrimaryGeneratorAction::GeneratePrimaries()", "MyCode0002", JustWarning, msg);
-  }
-
-// Beam spread radius
-
-  G4double beamRadius = 1.0 * cm;
-
-// Random position INSIDE detector-sized region
-
-  G4double x0 =
-    beamRadius * (2.0 * G4UniformRand() - 1.0);
-
-  G4double y0 =
-    beamRadius * (2.0 * G4UniformRand() - 1.0); 
+    // --- 3. Energy Distribution ---
+    G4double currentEnergy = fEnergyMean;
+    if (fEnergyDist == "Gaussian") {
+        currentEnergy = G4RandGauss::shoot(fEnergyMean, fEnergySigma);
+        // Prevent negative energy
+        if (currentEnergy < 0.) currentEnergy = 0.; 
+    }
     
-  G4double z0 = -0.5 * chamberSizeZ + 1 * mm;
+    fParticleGun->SetParticleEnergy(currentEnergy);
 
-  fParticleGun->SetParticlePosition(G4ThreeVector(x0, y0, z0));
-
-  fParticleGun->GeneratePrimaryVertex(event);
+    // --- Generate ---
+    fParticleGun->GeneratePrimaryVertex(event);
 }
 
 }

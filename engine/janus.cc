@@ -5,6 +5,8 @@
 #include "DetectorConstruction.hh"
 #include "QBBC.hh"
 
+#include "G4EmParameters.hh"
+#include "G4HadronicProcessStore.hh"
 #include "G4RunManagerFactory.hh"
 #include "G4SteppingVerbose.hh"
 #include "G4UIExecutive.hh"
@@ -45,8 +47,14 @@ int main(int argc, char** argv)
 
   // Physics list
   auto physicsList = new QBBC;
-  physicsList->SetVerboseLevel(1);
+  physicsList->SetVerboseLevel(0);
+  
+  G4EmParameters::Instance()->SetVerbose(0);
+  G4HadronicProcessStore::Instance()->SetVerbose(0);
+
   runManager->SetUserInitialization(physicsList);
+
+
 
   // User action initialization
   runManager->SetUserInitialization(new ActionInitialization());

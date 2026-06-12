@@ -1,8 +1,13 @@
-# Janus macro
-
+/control/verbose 0
+/run/verbose 0
+/event/verbose 0
+/tracking/verbose 0
 /run/initialize
-
 /gun/particle proton
-/gun/energy 50 GeV
-
-/run/beamOn 5
+/gun/beam/profile Gaussian
+/gun/beam/sigma 1 cm
+/gun/beam/direction 0 0 1
+/gun/beam/offset 0 0 -10 cm
+/gun/beam/energyDist Mono
+/gun/beam/energyMean 50 GeV
+/run/beamOn 100
