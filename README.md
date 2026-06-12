@@ -16,7 +16,7 @@ Early results already demonstrate antiproton generation from proton bombardment 
 <br>
 <br>
 
-Other interesting observations include the antineutron as well as the anti-lamba and anti-sigma baryons,<br><br>
+Other interesting observations include the antineutron as well as the anti-lambda and anti-sigma baryons.<br><br>
 <img width="827" height="72" alt="image" src="https://github.com/user-attachments/assets/56902917-3b33-4fb2-8821-da344c3abf13" />
 <img width="827" height="47" alt="image" src="https://github.com/user-attachments/assets/e6362713-74cd-4392-ba26-7319808740a7" />
 
