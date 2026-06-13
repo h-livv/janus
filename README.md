@@ -2,7 +2,7 @@
 
 Janus is a stochastic framework for simulating and optimizing particle generation, with a focus on antimatter systems. <br>
 
-<img width="300" height="300" alt="image" src="https://github.com/user-attachments/assets/c17bd255-92c0-4b26-ae35-f1db03b9b85c" />
+<img width="500" height="400" alt="image" src="https://github.com/user-attachments/assets/3d2de231-3db6-4768-8cbb-384f577c836a" />
 
 <br>
 Current development focuses on high-energy proton-target interactions using Geant4, automated experiment pipelines, and observable extraction for antimatter yield studies.
