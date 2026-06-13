@@ -49,7 +49,7 @@ Beam configuration
 
 Output filters
 - Antimatter
-- Drop light particles
+- Light particle filtration
 - Save secondaries
 - Record mode (Birth, Hit, Track)
 
@@ -85,7 +85,7 @@ janus/
 ## Roadmap
 
 - Refinement of data pipeline: shift from csv to a more efficient format.
-- Implementation of antimatter production and storage pipeline entirely in python:
+- Implementation of higher-level antimatter transport and storage pipeline:
   * Magnetic Filtration
   * Cooling and speed reduction
   * Trapping
