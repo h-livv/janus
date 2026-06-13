@@ -1,8 +1,12 @@
+import cmd
 from pathlib import Path
 import subprocess
-import shutil
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+import glob
+import shutil
+
+from matplotlib import interactive, lines
 
 # =========================================================
 # Paths
@@ -15,7 +19,6 @@ PROJECT_ROOT = BASE_DIR.parent
 EXECUTABLE = ENGINE_DIR / "build" / "janus"
 MACRO_PATH = ENGINE_DIR / "macros" / "run.mac"
 
-# Where the C++ engine hardcodes the output
 HARDCODED_CSV = PROJECT_ROOT / "temp" / "particle_tracks.csv"
 
 # The master directory where your packaged runs will be saved
@@ -37,16 +40,30 @@ class Beam:
         self.radius = "1 cm"       # Used if profile is Flat
         self.sigma = "0.5 cm"      # Used if profile is Gaussian
         
+        #Direction & Offset
+        self.direction = "0 0 1"
+        self.offset = "0 0 -10cm"
+        
         # Energy
         self.energy_dist = "Mono"  # "Mono" or "Gaussian"
-        self.energy_mean = "10 GeV"
-        self.energy_sigma = "1 GeV" # Used if energy_dist is Gaussian
+        self.energy_mean = "26 GeV"
+        self.energy_sigma = "26 GeV" # Used if energy_dist is Gaussian
         
 # =========================================================
-# Target Configuration
+# Environment Configuration
 # =========================================================
 
+class Environment:
+    def __init__(self):
+        # World / Chamber Settings
+        self.world_material = "G4_Galactic"
+        self.chamber_material = "G4_AIR"
 
+        # Target Properties
+        self.target_shape = "Box"        # "Box", "Cylinder", or "Sphere"
+        self.target_material = "G4_W"
+        self.target_width = "10 cm"      # Acts as thickness/diameter depending on shape
+        self.target_position = "0 0 0 cm"
 
 # =========================================================
 # Simulation Engine
@@ -57,58 +74,239 @@ class Simulation:
     def __init__(self):
 
         self.beam = Beam()
+        self.environment = Environment()
+        
+        self.output_filter = "Antimatter" #"All" or "Antimatter"
+        self.drop_light_particles = True #True or False
+        self.save_secondaries = False #True or False
+        self.record_mode = "Birth" # "Birth", "Hit", or "Track"
+        
+        self.physics_list = "FTFP_BERT" # FTFP_BERT or QGSP_BIC
+        self.production_cut = None #Dynamic or None
+        self.tracking_cut = None #Dynamic or None
+        self.seed = None #Dynamic or None
+        self.threads = None # N-1 for safety
+        
+    # -----------------------------------------------------
+    # Configuration Loader
+    # -----------------------------------------------------
+    def load_config(self, filepath="config.json"):
+        """Loads parameters from a JSON file and overrides defaults."""
+        try:
+            with open(filepath, "r") as f:
+                config = json.load(f)
+        except FileNotFoundError:
+            print(f"[-] Warning: {filepath} not found. Using default parameters.")
+            return False # Default to non-interactive if no config exists
+
+        # Map Environment Settings safely
+        if "environment" in config:
+            env = config["environment"]
+            self.environment.world_material = env.get("world_material", self.environment.world_material)
+            self.environment.chamber_material = env.get("chamber_material", self.environment.chamber_material)
+            self.environment.target_shape = env.get("target_shape", self.environment.target_shape)
+            self.environment.target_material = env.get("target_material", self.environment.target_material)
+            self.environment.target_width = env.get("target_width", self.environment.target_width)
+            self.environment.target_position = env.get("target_position", self.environment.target_position)
+
+        # Map Beam Settings safely
+        if "beam" in config:
+            beam = config["beam"]
+            self.beam.particle = beam.get("particle", self.beam.particle)
+            self.beam.count = beam.get("count", self.beam.count)
+            self.beam.profile = beam.get("profile", self.beam.profile)
+            self.beam.radius = beam.get("radius", self.beam.radius)
+            self.beam.sigma = beam.get("sigma", self.beam.sigma)
+            self.beam.direction = beam.get("direction", self.beam.direction)
+            self.beam.offset = beam.get("offset", self.beam.offset)
+            self.beam.energy_dist = beam.get("energy_dist", self.beam.energy_dist)
+            self.beam.energy_mean = beam.get("energy_mean", self.beam.energy_mean)
+            self.beam.energy_sigma = beam.get("energy_sigma", self.beam.energy_sigma)
+            
+        # Map Output Settings safely
+        if "output" in config:
+            output_cfg = config["output"]
+            self.output_filter = output_cfg.get("filter", self.output_filter)
+            self.drop_light_particles = output_cfg.get("drop_light_particles", self.drop_light_particles),
+            self.save_secondaries = output_cfg.get("save_secondaries", self.save_secondaries)
+            self.record_mode = output_cfg.get("record_mode", self.record_mode)
+            
+        # Map Run Settings safely
+        run_settings = config.get("run_settings", {})
+        self.physics_list = run_settings.get("physics_list", self.physics_list)
+        self.production_cut = run_settings.get("production_cut", self.production_cut)
+        self.tracking_cut = run_settings.get("tracking_cut", self.tracking_cut)
+        self.seed = run_settings.get("seed", self.seed)
+        self.threads = run_settings.get("threads", self.threads)
+
+        # Return the interactive flag so run.py knows how to launch
+        return run_settings.get("interactive", False)
 
     # -----------------------------------------------------
     # Macro Generation
     # -----------------------------------------------------
 
-    def generate_macro(self):
+    def generate_macro(self, interactive=False):
 
         lines = [
-            # Verbosity
             "/control/verbose 0",
             "/run/verbose 0",
             "/event/verbose 0",
             "/tracking/verbose 0",
-
-            # Initialize
-            "/run/initialize",
-
-            # Particle
-            f"/gun/particle {self.beam.particle}",
-
-            # Profile & Position
-            f"/gun/beam/profile {self.beam.profile}",
+            "/process/verbose 0",
+            "/material/verbose 0",
+            "/run/particle/verbose 0",
         ]
+
+        # ---------------------------------------------
+        # Seed Initialization
+        # ---------------------------------------------
+        # Geant4 requires random seeds to be set BEFORE initialization
+        if self.seed is not None:
+            lines.append(f"/random/setSeeds {self.seed} {self.seed}")
+
+        # ---------------------------------------------
+        # Environment & Geometry
+        # ---------------------------------------------
+        # Geometry must be defined BEFORE initialization
+        lines.extend([
+            f"/janus/det/setWorldMaterial {self.environment.world_material}",
+            f"/janus/det/setChamberMaterial {self.environment.chamber_material}",
+            f"/janus/det/setTargetShape {self.environment.target_shape}",
+            f"/janus/det/setTargetMaterial {self.environment.target_material}",
+            f"/janus/det/setTargetWidth {self.environment.target_width}",
+            f"/janus/det/setTargetPosition {self.environment.target_position}",
+            f"/janus/output/setFilter 1" if self.output_filter.lower() == "antimatter" else f"/janus/output/setFilter 0",
+            f"/janus/output/setLightFilter 1" if self.drop_light_particles else f"/janus/output/setLightFilter 0",
+        ])
+        
+        # Dynamic Thread Injection
+        if self.threads is not None:
+            lines.append(f"/run/numberOfThreads {self.threads}")
+            
+        lines.append("/run/initialize")
+
+        # ---------------------------------------------
+        # Production & Tracking Cuts
+        # ---------------------------------------------
+        # Cuts MUST be applied AFTER initialize
+        if self.production_cut is not None:
+            lines.append(f"/run/setCut {self.production_cut}")
+            
+        if self.tracking_cut is not None:
+            lines.append(f"/janus/tracking/setEnergyCut {self.tracking_cut}")
+        
+        lines.append(f"/janus/tracking/saveSecondaries {'true' if self.save_secondaries else 'false'}")
+        lines.append(f"/janus/tracking/recordMode {self.record_mode}")
+
+        # ---------------------------------------------
+        # Beam Configuration
+        # ---------------------------------------------
+        lines.extend([
+            f"/gun/particle {self.beam.particle}",
+            f"/gun/beam/profile {self.beam.profile}"
+        ])
 
         if self.beam.profile == "Flat":
             lines.append(f"/gun/beam/radius {self.beam.radius}")
         elif self.beam.profile == "Gaussian":
             lines.append(f"/gun/beam/sigma {self.beam.sigma}")
 
-        # Geometry
         lines.append(f"/gun/beam/direction {self.beam.direction}")
         lines.append(f"/gun/beam/offset {self.beam.offset}")
-
-        # Energy
         lines.append(f"/gun/beam/energyDist {self.beam.energy_dist}")
         lines.append(f"/gun/beam/energyMean {self.beam.energy_mean}")
         
         if self.beam.energy_dist == "Gaussian":
             lines.append(f"/gun/beam/energySigma {self.beam.energy_sigma}")
 
-        # Run
-        lines.append(f"/run/beamOn {self.beam.count}")
+        # -------------------------------------------------
+        # Dynamic Visualization Injection
+        # -------------------------------------------------
+        if interactive:
+            lines.extend([
+                # --- Initial Setup ---
+                "/vis/open OGL",
+                "/vis/viewer/set/autoRefresh false",
+                "/vis/verbose errors",
+                "/vis/drawVolume",
 
+                # --- Camera & Lights Setup ---
+                "/vis/viewer/set/viewpointVector -1 0 0",
+                "/vis/viewer/set/lightsVector -1 0 0",
+
+                # --- Base Style Setup ---
+                "/vis/viewer/set/style wireframe",
+                "/vis/viewer/set/auxiliaryEdge true",
+                "/vis/viewer/set/lineSegmentsPerCircle 100",
+
+                # --- Trajectory Styling (Particle ID Upgrade) ---
+                "/vis/scene/add/trajectories smooth",
+                "/vis/modeling/trajectories/create/drawByParticleID",
+                "/vis/modeling/trajectories/drawByParticleID-0/default/setDrawStepPts false",
+                "/vis/modeling/trajectories/drawByParticleID-0/default/setLineWidth 1",
+                
+                # --- Paint the Antimatter ---
+                "/vis/modeling/trajectories/drawByParticleID-0/set e+ magenta",       # Positrons glow Pink
+                "/vis/modeling/trajectories/drawByParticleID-0/set anti_proton red",  # Antiprotons glow Red
+                
+                # --- Standard Shower Particles ---
+                "/vis/modeling/trajectories/drawByParticleID-0/set proton blue",      # Primary Beam
+                "/vis/modeling/trajectories/drawByParticleID-0/set e- cyan",          # Electrons
+                "/vis/modeling/trajectories/drawByParticleID-0/set gamma gray",       # Gamma Rays
+                "/vis/modeling/trajectories/drawByParticleID-0/set neutron green",   # Neutrons
+                "/vis/modeling/trajectories/drawByParticleID-0/set pi+ yellow",        # Pions
+                "/vis/modeling/trajectories/drawByParticleID-0/set pi- yellow",
+                "/vis/modeling/trajectories/drawByParticleID-0/set pi0 white",
+                
+                # LIMIT TO 100 EVENTS (Crash Prevention)
+                "/vis/scene/endOfEventAction accumulate 1000",
+
+                # --- Decorations ---
+                "/vis/set/textColour green",
+                "/vis/set/textLayout right",
+                "/vis/scene/add/text2D 0.9 -.9 24 ! ! Janus",
+                "/vis/set/textLayout",
+                "/vis/set/textColour",
+                "/vis/scene/add/eventID",
+
+                # --- Specific Geometry Styling ---
+                "/vis/geometry/set/visibility World 0 false",
+                "/vis/geometry/set/colour Chamber 1 1 1 1 0.1",
+                "/vis/geometry/set/colour Target 0.8 0.8 0.8 1.0",
+
+                # --- Final Presentation ---
+                "/vis/viewer/set/style surface",
+                "/vis/viewer/set/hiddenMarker true",
+                "/vis/viewer/set/viewpointThetaPhi 120 150",
+                
+                # --- Custom GUI Dropdown Menus ---
+                "/gui/addMenu run Run",
+                "/gui/addButton run \"Run 1 event\" \"/run/beamOn 1\"",
+                "/gui/addButton run \"Run 10 events\" \"/run/beamOn 10\"",
+                "/gui/addButton run \"Run 100 events\" \"/run/beamOn 100\"",
+                "/gui/addButton run \"Run 1000 events\" \"/run/beamOn 1000\"",
+                f"/gui/addButton run \"Run Configured Beam ({self.beam.count})\" \"/run/beamOn {self.beam.count}\"",
+                "/gui/addButton run \"Clear Screen\" \"/vis/viewer/clear\"",
+
+                # --- Refresh & Flush ---
+                "/vis/viewer/set/autoRefresh true",
+                "/vis/verbose warnings",
+                "/vis/viewer/flush",
+            ])
+        else:
+            # Batch Mode: No visualization, run the full count
+            lines.append(f"/run/beamOn {self.beam.count}")
+            
         return "\n".join(lines)
 
     # -----------------------------------------------------
     # Write Macro File
     # -----------------------------------------------------
 
-    def write_macro(self):
+    def write_macro(self, interactive=False):
 
-        macro = self.generate_macro()
+        macro = self.generate_macro(interactive)
 
         with open(MACRO_PATH, "w") as f:
             f.write(macro)
@@ -119,16 +317,41 @@ class Simulation:
     # -----------------------------------------------------
 
     def get_run_identifier(self):
-        """Generates a unique timestamped name for the run folder."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        """Generates a descriptive folder name: 
+           e.g., run_100k_proton_50GeV_Tungsten_20260613_0110"""
+           
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        
+        now_ist = datetime.now(ist_tz)
+        timestamp = now_ist.strftime("%Y%m%d_%H%M")
+        
+        # 1. Format the count (e.g., 100000 -> 100k)
+        count_val = int(self.beam.count)
+        if count_val >= 1000000:
+            count_str = f"{count_val // 1000000}M"
+        elif count_val >= 1000:
+            count_str = f"{count_val // 1000}k"
+        else:
+            count_str = str(count_val)
+            
+        # 2. Get energy string
         energy_str = self.beam.energy_mean.replace(" ", "")
-        return f"run_{timestamp}_{self.beam.particle}_{energy_str}"
-
+        
+        # 3. Get target material (stripping the "G4_" prefix for cleaner names)
+        material = self.environment.target_material.replace("G4_", "")
+        
+        return f"run_{count_str}_{self.beam.particle}_{energy_str}_{material}_{timestamp}"
+    
     def save_metadata(self, run_folder, run_name):
         """Creates the JSON configuration file."""
+        
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+    
+        now_ist = datetime.now(ist_tz)
+        
         metadata = {
             "run_id": run_name,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_ist.isoformat(),
             "beam": {
                 "particle": self.beam.particle,
                 "events": self.beam.count,
@@ -140,8 +363,28 @@ class Simulation:
                 "energy_dist": self.beam.energy_dist,
                 "energy_mean": self.beam.energy_mean,
                 "energy_sigma": self.beam.energy_sigma if self.beam.energy_dist == "Gaussian" else None
+            },
+            "environment": {
+                "world_material": self.environment.world_material,
+                "chamber_material": self.environment.chamber_material,
+                "target_shape": self.environment.target_shape,
+                "target_material": self.environment.target_material,
+                "target_width": self.environment.target_width,
+                "target_position": self.environment.target_position
+            },
+            "output settings": {
+                "filter": self.output_filter,
+                "drop_light_particles": self.drop_light_particles,
+                "save_secondaries": self.save_secondaries,
+                "record_mode": self.record_mode
+            },
+            "run_settings": {
+                "physics_list": self.physics_list,
+                "production_cut": self.production_cut,
+                "tracking_cut": self.tracking_cut,
+                "seed": self.seed,
+                "threads": self.threads
             }
-            # You can easily add a "target" dictionary here later
         }
         
         json_path = run_folder / f"{run_name}_config.json"
@@ -153,11 +396,28 @@ class Simulation:
     # -----------------------------------------------------
 
     
-    def run(self):
+    def run(self, interactive=False):
+        
+        # 1. Write the macro, telling it whether to include Vis commands
+        self.write_macro(interactive)
+        
+        cmd = [str(EXECUTABLE), str(MACRO_PATH), "--physics", self.physics_list]
 
+        # --- INTERACTIVE MODE ---
+        if interactive:
+            print("\n========== JANUS INTERACTIVE MODE ==========")
+            print(f"Physics List: {self.physics_list}")
+            print("Launching Geant4 GUI...")
+            
+            cmd.append("--interactive")
+            subprocess.run(cmd, cwd=ENGINE_DIR / "build")
+            return
+
+        # --- AUTOMATED MODE ---
         self.write_macro()
 
         print("\n========== JANUS SIMULATION ==========")
+        print(f"Physics     : {self.physics_list}")
         print(f"Particle    : {self.beam.particle}")
         print(f"Events      : {self.beam.count}")
         print(f"Profile     : {self.beam.profile}")
@@ -178,7 +438,7 @@ class Simulation:
         print("======================================\n")
 
         result = subprocess.run(
-            [str(EXECUTABLE), str(MACRO_PATH)],
+            cmd,
             cwd=ENGINE_DIR / "build",
             capture_output=True,
             text=True
@@ -235,12 +495,10 @@ class Simulation:
                 elif "Number of events" in line:
                     print(line)
 
-                elif "anti" in line:
-                    print(line)
-
         # -------------------------------------------------
         # stderr
         # -------------------------------------------------
 
         if result.stderr:
             print(result.stderr)
+            

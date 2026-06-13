@@ -1,13 +1,9 @@
 /// \file RunAction.cc
-/// \brief Implementation of the janus::RunAction class
-
 #include "RunAction.hh"
-
 #include "PrimaryGeneratorAction.hh"
 
-#include "G4AccumulableManager.hh"
-#include "G4ParticleDefinition.hh"
 #include "G4ParticleGun.hh"
+#include "G4AccumulableManager.hh"
 #include "G4Run.hh"
 #include "G4RunManager.hh"
 #include "G4SystemOfUnits.hh"
@@ -17,101 +13,51 @@ namespace janus
 {
 
 RunAction::RunAction()
+: G4UserRunAction()
 {
-  // Register accumulable to the accumulable manager
-  G4AccumulableManager* accumulableManager =
-      G4AccumulableManager::Instance();
-
+  // 1. Use Register (not RegisterAccumulable) to satisfy the compiler
+  G4AccumulableManager* accumulableManager = G4AccumulableManager::Instance();
   accumulableManager->Register(fEdep);
 }
 
+// 2. REMOVED the ~RunAction() definition here because it is handled in the .hh file
+
 void RunAction::BeginOfRunAction(const G4Run*)
 {
-  // Disable random seed storage
   G4RunManager::GetRunManager()->SetRandomNumberStore(false);
-
-  // Reset accumulables
-  G4AccumulableManager* accumulableManager =
-      G4AccumulableManager::Instance();
-
-  accumulableManager->Reset();
+  G4AccumulableManager::Instance()->Reset();
 }
 
 void RunAction::EndOfRunAction(const G4Run* run)
 {
   G4int nofEvents = run->GetNumberOfEvent();
-
   if (nofEvents == 0) return;
 
-  // Merge accumulables
-  G4AccumulableManager* accumulableManager =
-      G4AccumulableManager::Instance();
-
+  G4AccumulableManager* accumulableManager = G4AccumulableManager::Instance();
   accumulableManager->Merge();
 
-  // Total deposited energy
-  G4double edep = fEdep.GetValue();
-
-  // Run conditions
-  const auto generatorAction =
-      static_cast<const PrimaryGeneratorAction*>(
-          G4RunManager::GetRunManager()
-              ->GetUserPrimaryGeneratorAction());
-
-  G4String runCondition;
-
-  if (generatorAction)
+  if (IsMaster()) 
   {
-    const G4ParticleGun* particleGun =
-        generatorAction->GetParticleGun();
+    G4double edep = fEdep.GetValue();
 
-    runCondition +=
-        particleGun->GetParticleDefinition()->GetParticleName();
+    const auto generatorAction =
+        static_cast<const PrimaryGeneratorAction*>(
+            G4RunManager::GetRunManager()->GetUserPrimaryGeneratorAction());
 
-    runCondition += " of ";
+    G4String particleName = "Undefined";
+    G4double energy = 0.0;
 
-    G4double particleEnergy =
-        particleGun->GetParticleEnergy();
-
-    runCondition +=
-        G4BestUnit(particleEnergy, "Energy");
+    if (generatorAction)
+    {
+      particleName = generatorAction->GetParticleGun()->GetParticleDefinition()->GetParticleName();
+      energy = generatorAction->GetParticleGun()->GetParticleEnergy();
+    }
   }
-
-  // Print summary
-  if (IsMaster())
-  {
-    G4cout << G4endl
-           << "-------------------- End of Global Run --------------------";
-  }
-  else
-  {
-    G4cout << G4endl
-           << "-------------------- End of Local Run ---------------------";
-  }
-
-  G4cout << G4endl
-         << " Number of events: "
-         << nofEvents
-         << " | "
-         << runCondition
-         << G4endl
-         << G4endl;
-
-  G4cout << " Total deposited energy = "
-         << G4BestUnit(edep, "Energy")
-         << " ("
-         << edep / joule
-         << " J)"
-         << G4endl;
-
-  G4cout << "-----------------------------------------------------------"
-         << G4endl
-         << G4endl;
 }
 
 void RunAction::AddEdep(G4double edep)
 {
-    fEdep += edep;
+  fEdep += edep;
 }
 
-}
+} // end namespace janus

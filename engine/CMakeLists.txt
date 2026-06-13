@@ -59,9 +59,7 @@ target_link_libraries(janus
 #----------------------------------------------------------------------------
 
 set(JANUS_MACROS
-    macros/init_vis.mac
     macros/run.mac
-    macros/vis.mac
 )
 
 foreach(_macro ${JANUS_MACROS})

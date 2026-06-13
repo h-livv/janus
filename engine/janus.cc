@@ -1,96 +1,30 @@
 /// \file janus.cc
 /// \brief Main program
 
-#include "ActionInitialization.hh"
-#include "DetectorConstruction.hh"
-#include "QBBC.hh"
-
-#include "G4EmParameters.hh"
-#include "G4HadronicProcessStore.hh"
-#include "G4RunManagerFactory.hh"
-#include "G4SteppingVerbose.hh"
-#include "G4UIExecutive.hh"
-#include "G4UImanager.hh"
-#include "G4VisExecutive.hh"
-#include "Randomize.hh"
-#include <ctime>
+#include "JanusSession.hh"
+#include <exception>
+#include <iostream>
 
 using namespace janus;
 
 int main(int argc, char** argv)
 {
+    try 
+    {
+        // 1. Instantiate the engine session
+        JanusSession session(argc, argv);
 
-  // Detect interactive mode (if no arguments) and define UI session
-  //
-  G4UIExecutive* ui = nullptr;
-  if (argc == 1) {
-    ui = new G4UIExecutive(argc, argv);
-  }
+        // 2. Initialize Geant4 internals (Physics, Geometry, Actions)
+        session.Initialize();
 
-  //Choose a different Random engine...
-  G4Random::setTheEngine(new CLHEP::MTwistEngine);
+        // 3. Execute batch macro or open interactive UI
+        session.Run();
+    }
+    catch (const std::exception& e) 
+    {
+        std::cerr << "Janus Engine Fatal Error: " << e.what() << std::endl;
+        return 1;
+    }
 
-  // use G4SteppingVerboseWithUnits
-  G4int precision = 4;
-  G4SteppingVerbose::UseBestUnit(precision);
-
-  G4Random::setTheSeed(time(nullptr));
-
-  // Construct the default run manager
-  //
-  auto runManager = G4RunManagerFactory::CreateRunManager(G4RunManagerType::Serial);
-
-  // Set mandatory initialization classes
-  //
-  // Detector construction
-  runManager->SetUserInitialization(new DetectorConstruction());
-
-  // Physics list
-  auto physicsList = new QBBC;
-  physicsList->SetVerboseLevel(0);
-  
-  G4EmParameters::Instance()->SetVerbose(0);
-  G4HadronicProcessStore::Instance()->SetVerbose(0);
-
-  runManager->SetUserInitialization(physicsList);
-
-
-
-  // User action initialization
-  runManager->SetUserInitialization(new ActionInitialization());
-
-  // Initialize visualization with the default graphics system
-  auto visManager = new G4VisExecutive(argc, argv);
-  // Constructors can also take optional arguments:
-  // - a graphics system of choice, eg. "OGL"
-  // - and a verbosity argument - see /vis/verbose guidance.
-  // auto visManager = new G4VisExecutive(argc, argv, "OGL", "Quiet");
-  // auto visManager = new G4VisExecutive("Quiet");
-  visManager->Initialize();
-
-  // Get the pointer to the User Interface manager
-  auto UImanager = G4UImanager::GetUIpointer();
-
-  // Process macro or start UI session
-  //
-  if (!ui) {
-    // batch mode
-    G4String command = "/control/execute ";
-    G4String fileName = argv[1];
-    UImanager->ApplyCommand(command + fileName);
-  }
-  else {
-    // interactive mode
-    UImanager->ApplyCommand("/control/execute macros/init_vis.mac");
-    ui->SessionStart();
-    delete ui;
-  }
-
-  // Job termination
-  // Free the store: user actions, physics_list and detector_description are
-  // owned and deleted by the run manager, so they should not be deleted
-  // in the main() program !
-
-  delete visManager;
-  delete runManager;
+    return 0;
 }

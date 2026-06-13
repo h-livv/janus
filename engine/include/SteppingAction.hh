@@ -1,33 +1,38 @@
 /// \file SteppingAction.hh
-/// \brief Definition of the janus::SteppingAction class
 
-#ifndef B1SteppingAction_h
-#define B1SteppingAction_h 1
+#ifndef SteppingAction_h
+#define SteppingAction_h 1
 
 #include "G4UserSteppingAction.hh"
+#include "globals.hh"
 
 class G4LogicalVolume;
-class G4Step;
+class G4GenericMessenger;
 
 namespace janus
 {
 
 class EventAction;
 
-/// Stepping action class
-
 class SteppingAction : public G4UserSteppingAction
 {
   public:
     SteppingAction(EventAction* eventAction);
-    ~SteppingAction() override = default;
+    ~SteppingAction() override;
 
-    // method from the base class
     void UserSteppingAction(const G4Step*) override;
 
   private:
     EventAction* fEventAction = nullptr;
     G4LogicalVolume* fScoringVolume = nullptr;
+
+    // --- Output Filtering & Tracking ---
+    G4GenericMessenger* fMessenger = nullptr;
+    G4int fFilterMode; 
+    G4double fTrackingCut;
+
+    G4bool fSaveSecondaries;
+    G4String fRecordMode;
 };
 
 }

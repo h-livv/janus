@@ -1,8 +1,0 @@
-# Janus interactive initialization
-
-/control/verbose 1
-/run/verbose 1
-
-/run/initialize
-
-/control/execute macros/vis.mac

@@ -1,34 +1,52 @@
 /// \file ActionInitialization.cc
-/// \brief Implementation of the janus::ActionInitialization class
-
 #include "ActionInitialization.hh"
-
-#include "EventAction.hh"
 #include "PrimaryGeneratorAction.hh"
 #include "RunAction.hh"
+#include "EventAction.hh"
 #include "SteppingAction.hh"
+
+#include "G4GenericMessenger.hh"
 
 namespace janus
 {
 
-void ActionInitialization::BuildForMaster() const
+// Initialize the static variable (1 = Antimatter, 0 = All)
+G4int ActionInitialization::fFilterMode = 1;
+G4bool ActionInitialization::fLightFilter = true;
+
+ActionInitialization::ActionInitialization()
+ : G4VUserActionInitialization()
 {
-  auto runAction = new RunAction;
-  SetUserAction(runAction);
+    // The Master Thread safely registers the command here
+    fMessenger = new G4GenericMessenger(this, "/janus/output/", "Output control");
+    fMessenger->DeclareProperty("setFilter", fFilterMode, "0:All, 1:Antimatter");
+    fMessenger->DeclareProperty("setLightFilter", fLightFilter, "True:Drop e+/pi-/mu+/nu, False:Keep all");
 }
 
+ActionInitialization::~ActionInitialization()
+{
+    delete fMessenger;
+}
+
+void ActionInitialization::BuildForMaster() const
+{
+    SetUserAction(new RunAction());
+}
 
 void ActionInitialization::Build() const
 {
-  SetUserAction(new PrimaryGeneratorAction);
-
-  auto runAction = new RunAction;
-  SetUserAction(runAction);
-
-  auto eventAction = new EventAction(runAction);
-  SetUserAction(eventAction);
-
-  SetUserAction(new SteppingAction(eventAction));
+    SetUserAction(new PrimaryGeneratorAction());
+    
+    // 1. Create the RunAction and save its pointer
+    auto runAction = new RunAction();
+    SetUserAction(runAction);
+    
+    // 2. Pass the RunAction pointer into the EventAction
+    auto eventAction = new EventAction(runAction);
+    SetUserAction(eventAction);
+    
+    // 3. Pass the EventAction pointer into the SteppingAction
+    SetUserAction(new SteppingAction(eventAction));
 }
 
 }
