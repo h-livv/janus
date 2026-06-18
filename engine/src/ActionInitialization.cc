@@ -4,6 +4,7 @@
 #include "RunAction.hh"
 #include "EventAction.hh"
 #include "SteppingAction.hh"
+#include "TrackingAction.hh"
 
 #include "G4GenericMessenger.hh"
 
@@ -47,6 +48,9 @@ void ActionInitialization::Build() const
     
     // 3. Pass the EventAction pointer into the SteppingAction
     SetUserAction(new SteppingAction(eventAction));
+
+    // 4. Pass the TrackingAction
+    SetUserAction(new TrackingAction());
 }
 
 }

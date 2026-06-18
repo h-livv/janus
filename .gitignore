@@ -1,6 +1,8 @@
 build/
 outputs/
 temp/
+reference_docs/
+*.hdf5
 *.csv
 *.root
 *.out

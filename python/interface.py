@@ -19,7 +19,8 @@ PROJECT_ROOT = BASE_DIR.parent
 EXECUTABLE = ENGINE_DIR / "build" / "janus"
 MACRO_PATH = ENGINE_DIR / "macros" / "run.mac"
 
-HARDCODED_CSV = PROJECT_ROOT / "temp" / "particle_tracks.csv"
+HARDCODED_H5_VAL = PROJECT_ROOT / "temp" / "validation.hdf5"
+HARDCODED_H5_SIM = PROJECT_ROOT / "temp" / "simulation.hdf5"
 
 # The master directory where your packaged runs will be saved
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
@@ -42,7 +43,7 @@ class Beam:
         
         #Direction & Offset
         self.direction = "0 0 1"
-        self.offset = "0 0 -10cm"
+        self.offset = "0 0 -10 cm"
         
         # Energy
         self.energy_dist = "Mono"  # "Mono" or "Gaussian"
@@ -90,8 +91,10 @@ class Simulation:
     # -----------------------------------------------------
     # Configuration Loader
     # -----------------------------------------------------
-    def load_config(self, filepath="config.json"):
+    def load_config(self, filepath=None):
         """Loads parameters from a JSON file and overrides defaults."""
+        if filepath is None:
+            filepath = BASE_DIR / "config.json"
         try:
             with open(filepath, "r") as f:
                 config = json.load(f)
@@ -461,24 +464,33 @@ class Simulation:
         # Data Packaging & Archiving
         # -------------------------------------------------
         
-        if HARDCODED_CSV.exists():
+        subprocess.run(["python3", str(BASE_DIR / "merge_h5.py"), str(PROJECT_ROOT / "temp" / "validation"), str(HARDCODED_H5_VAL)])
+        subprocess.run(["python3", str(BASE_DIR / "merge_h5.py"), str(PROJECT_ROOT / "temp" / "simulation"), str(HARDCODED_H5_SIM)])
+        
+        if HARDCODED_H5_VAL.exists() and HARDCODED_H5_SIM.exists():
             # 1. Generate unique run name and create the directory
             run_name = self.get_run_identifier()
             run_folder = OUTPUT_DIR / run_name
             run_folder.mkdir(parents=True, exist_ok=True)
             
-            # 2. Define the new CSV path inside the created folder
-            new_csv_path = run_folder / f"{run_name}_data.csv"
+            # 2. Define the new HDF5 paths
+            new_val_path = run_folder / "validation.hdf5"
+            new_sim_path = run_folder / "simulation.hdf5"
             
-            # 3. Move the C++ output file into the folder
-            shutil.move(str(HARDCODED_CSV), str(new_csv_path))
+            # 3. Move the C++ output files
+            shutil.move(str(HARDCODED_H5_VAL), str(new_val_path))
+            shutil.move(str(HARDCODED_H5_SIM), str(new_sim_path))
             
-            # 4. Generate and save the JSON file in the same folder
+            # 4. Generate and save the JSON file
             self.save_metadata(run_folder, run_name)
+            
+            # 5. Run analyze.py to generate summary
+            import analyze
+            analyze.generate_summary(new_val_path, run_folder)
             
             print(f"[+] Run packaged successfully in: /outputs/{run_name}/\n")
         else:
-            print("[-] Warning: Expected output CSV not found. Data packaging skipped.\n")
+            print("[-] Warning: Expected output HDF5 files not found. Data packaging skipped.\n")
 
         # -------------------------------------------------
         # Output Parsing
@@ -501,4 +513,27 @@ class Simulation:
 
         if result.stderr:
             print(result.stderr)
+            
+# =========================================================
+# Data Ingestion Abstractions
+# =========================================================
+
+def get_validation_data(filepath):
+    import h5py
+    import numpy as np
+    
+    data = {}
+    with h5py.File(filepath, 'r') as f:
+        def extract_datasets(node):
+            if isinstance(node, h5py.Dataset):
+                name = node.name.split('/')[-1]
+                data[name] = np.array(node)
+            elif isinstance(node, h5py.Group):
+                for key in node:
+                    extract_datasets(node[key])
+        extract_datasets(f)
+    return data
+
+def get_simulation_data(filepath):
+    return get_validation_data(filepath) # Same traversal logic works for both Ntuples
             
