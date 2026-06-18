@@ -12,26 +12,20 @@ A stochastic framework for simulating and optimizing particle generation, with a
 
 ---
 
-## Results
-
-Early results already demonstrate antiproton generation from proton bombardment of dense metal targets.
-
-<img width="700" height="219" alt="image" src="https://github.com/user-attachments/assets/6f971a6a-d240-40dd-a7f9-cf0c3764abcc" />
-
-<br>
-<br>
-
-Other interesting observations include:
-- Charmed particles such as the anti-Sigma-c, anti-Lambda-c, and D0 meson
-- anti-Omega anti-baryon. <br>
-<img width="700" height="98" alt="image" src="https://github.com/user-attachments/assets/16d3f475-dd70-457a-a17c-9cfb31ba9b49" />
-
----
-
 ## Validation Studies
 
-Coming soon
+`validation/` automatically verifies the physical accuracy of the generated outputs before the batch moves further down the pipeline.
 
+- **`validate.py`:** Evaluates event-by-event fundamental physics laws.
+  * Kinematic conservation (Energy/Momentum)
+  * Quantum Number conservation (Charge/Baryon)
+  * Statistical sanity checks (Total antinucleons, global Baryon conservation)
+
+- **`physical_validation.py`:** Generates diagnostic physics plots saved directly to `validation_outputs/`.
+  * Momentum mapping
+  * Pion multiplicity
+  * Vertex distribution
+  * Energy spectra
 ---
 
 ## Current Capabilities
@@ -66,36 +60,47 @@ Run settings
 
 ```
 janus/
+├── README.md                # Project documentation
 │
-├── engine/                  # Primary physics engine powered by Geant4
-│   ├── src/                 # Source files
-│   ├── include/             # Header files
-│   ├── macros/              # Macros
-│   ├── janus.cc             # Main file
-├── python/             
-│   ├── interface.py         # Python interface and data pipeline
-│   ├── run.py               # Run the python interface
-│   ├── run_batches.py       # Run multiple batches
+├── docs/                    # Documentation directory
 │
-└── README.md                # Project documentation
+├── engine/                  # C++ Geant4 Simulation Engine
+│   ├── CMakeLists.txt       # CMake configuration
+│   ├── build/               # Build directory containing compiled binaries
+│   ├── include/             # C++ header files (.hh)
+│   ├── janus.cc             # Main entry point for the simulation
+│   ├── macros/              # Geant4 macro scripts (.mac)
+│   └── src/                 # C++ source code (.cc)
+│
+├── interface/               # Python interface and data pipeline
+│   ├── config.json          # Default configuration for runs
+│   ├── run.py               # Script to run a single configuration
+│   ├── run_batches.py       # Script to execute multiple batches consecutively
+│   └── dependencies/        # Sub-module containing pipeline logic
+│
+├── outputs/                 # Directory containing packaged simulation runs
+│
+└── validation/              # Automated test and validation scripts
+    ├── physical_validation.py
+    ├── validate.py
+    └── validation_outputs/
 ```
 
 ---
 
 ## Roadmap
 
-- Refinement of data pipeline: shift from csv to a more efficient format.
 - Implementation of higher-level antimatter transport and storage pipeline:
   * Magnetic Filtration
-  * Cooling and speed reduction
+  * Cooling
   * Trapping
-- Integration of machine learning to optimize antimatter production.
+- Implementation of optimization algorithms to study antimatter yield
 
 ---
 
 ## Acknowledgements
 
-The core physics engine of Janus is built upon the Geant4 simulation toolkit. If you utilize this framework for academic or research purposes, please ensure you cite the following foundational Geant4 papers:
+The core physics engine of Janus is built upon the Geant4 simulation toolkit. If you utilize this framework for academic or research purposes, ensure you cite the following resources:
 
 [Recent Developments in Geant4](https://www.sciencedirect.com/science/article/pii/S0168900216306957), J. Allison et al., Nucl. Instrum. Meth. A 835 (2016) 186-225<br>
 [Geant4 Developments and Applications](https://ieeexplore.ieee.org/document/1610988), J. Allison et al., IEEE Trans. Nucl. Sci. 53 (2006) 270-278<br>
