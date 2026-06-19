@@ -27,8 +27,8 @@ A stochastic framework for simulating and optimizing particle generation, with a
   * Vertex distribution
   * Energy spectra
 
-Detailed validation study with outputs is available in [docs/validation_study.md](docs/validation_study.md).<br>
-This verifies that the Janus physics engine satisfies conservation laws, statistical benchmarks, and phenomenological validation criteria, providing confidence in the generated data for downstream applications.
+Detailed validation study with outputs is available in [docs/validation_study.md](docs/validation_study.md).<br><br>
+This study verifies that the Janus physics engine satisfies conservation laws, statistical benchmarks, and phenomenological validation criteria, providing confidence in the generated data for downstream applications.
 
 ---
 
