@@ -92,12 +92,12 @@ While Phases 1-3 assess the mathematical validity of the engine, Phase 4 provide
 ## Plots generated for 100,000 particles using phase 4:
 
 <img src="assets/validation_study/pT_vs_pL.png" alt="pT_vspL" width="400">
-<img src="assets/validation_study/multiplicity.png" alt="particle_multiplicity" width="400"> <br>
+<img src="assets/validation_study/multiplicity.png" alt="particle_multiplicity" width="400">
 <img src="assets/validation_study/energy_spectra.png" alt="spectroscopic_evaporation" width="400"> 
-<img src="assets/validation_study/vertex_distribution.png" alt="spatial_decay_profiles" width="400"> <br>
+<img src="assets/validation_study/vertex_distribution.png" alt="spatial_decay_profiles" width="400">
 
 ---
 
-### By using this framework to validate the high-energy physics engine of Janus, we can establish confidence that it is physically valid, reliable, and is ready for further use in downstream applications - transport pipeline and optimization studies.
+#### By using this framework to validate the high-energy physics engine of Janus, we can establish confidence that it is physically valid, reliable, and is ready for further use in downstream applications - the transport pipeline and optimization studies.
 
 ---
