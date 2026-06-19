@@ -1,4 +1,4 @@
-from interface import Simulation
+from dependencies.interface import Simulation
 
 def main():
     sim = Simulation()

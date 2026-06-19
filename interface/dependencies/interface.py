@@ -12,7 +12,7 @@ from matplotlib import interactive, lines
 # Paths
 # =========================================================
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 ENGINE_DIR = BASE_DIR.parent / "engine"
 PROJECT_ROOT = BASE_DIR.parent
 
@@ -464,8 +464,8 @@ class Simulation:
         # Data Packaging & Archiving
         # -------------------------------------------------
         
-        subprocess.run(["python3", str(BASE_DIR / "merge_h5.py"), str(PROJECT_ROOT / "temp" / "validation"), str(HARDCODED_H5_VAL)])
-        subprocess.run(["python3", str(BASE_DIR / "merge_h5.py"), str(PROJECT_ROOT / "temp" / "simulation"), str(HARDCODED_H5_SIM)])
+        subprocess.run(["python3", str(BASE_DIR / "dependencies" / "merge.py"), str(PROJECT_ROOT / "temp" / "validation"), str(HARDCODED_H5_VAL)])
+        subprocess.run(["python3", str(BASE_DIR / "dependencies" / "merge.py"), str(PROJECT_ROOT / "temp" / "simulation"), str(HARDCODED_H5_SIM)])
         
         if HARDCODED_H5_VAL.exists() and HARDCODED_H5_SIM.exists():
             # 1. Generate unique run name and create the directory
@@ -485,7 +485,7 @@ class Simulation:
             self.save_metadata(run_folder, run_name)
             
             # 5. Run analyze.py to generate summary
-            import analyze
+            from . import analyze
             analyze.generate_summary(new_val_path, run_folder)
             
             print(f"[+] Run packaged successfully in: /outputs/{run_name}/\n")

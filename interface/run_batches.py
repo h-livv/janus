@@ -1,6 +1,6 @@
 import time
 from pathlib import Path
-from interface import Simulation
+from dependencies.interface import Simulation
 
 def run_production_batches():
     # Define your validation suite
