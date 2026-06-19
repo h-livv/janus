@@ -26,6 +26,9 @@ A stochastic framework for simulating and optimizing particle generation, with a
   * Pion multiplicity
   * Vertex distribution
   * Energy spectra
+
+Detailed validation study with outputs is available in [docs/validation_study.md](docs/validation_study.md)
+
 ---
 
 ## Current Capabilities
