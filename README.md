@@ -12,15 +12,13 @@ A stochastic framework for simulating and optimizing particle generation, with a
 
 ---
 
-<<<<<<< HEAD
-=======
+
 ## Transport pipeline featuring magnetic filtration
 
-<img width="500" height="400" alt="pipeline" src="" />
+<img width="500" height="400" alt="Janus — Antimatter Transport Pipeline (Ubuntu) 2026-06-22 00-01-56 - Trim" src="https://github.com/user-attachments/assets/07dd3201-5374-48c3-a213-1432b4781579" />
 
 ---
 
->>>>>>> recovery-branch
 ## Validation Studies
 
 `validation/` automatically verifies the physical accuracy of the generated outputs before the batch moves further down the pipeline.
@@ -37,9 +35,9 @@ A stochastic framework for simulating and optimizing particle generation, with a
   * Energy spectra
 
 Detailed validation study with outputs is available in [docs/validation_study.md](docs/validation_study.md).<br><br>
-<<<<<<< HEAD
+
 This study verifies that the Janus physics engine satisfies conservation laws, statistical benchmarks, and phenomenological validation criteria, providing confidence in the generated data for downstream applications.
-=======
+
 The validation framework verifies conservation laws, statistical benchmarks, and phenomenological observables, providing confidence in generated datasets before transport and optimization studies.
 
 ---
@@ -60,7 +58,6 @@ Results:
 * Achieved **54.26%** survival on the training set and **53.42%** on the testing set.
 
 These results establish a strong baseline for future Janus transport studies involving realistic magnetic field models, stochastic interactions, cooling systems, trap injection, and full antimatter storage pipelines.
->>>>>>> recovery-branch
 
 ---
 
@@ -111,20 +108,6 @@ janus/
 │   ├── macros/              # Geant4 macro scripts (.mac)
 │   └── src/                 # C++ source code (.cc)
 │
-<<<<<<< HEAD
-├── interface/               # Python interface and data pipeline
-│   ├── config.json          # Default configuration for runs
-│   ├── run.py               # Script to run a single configuration
-│   ├── run_batches.py       # Script to execute multiple batches consecutively
-│   └── dependencies/        # Sub-module containing pipeline logic
-│
-├── outputs/                 # Directory containing packaged simulation runs
-│
-└── validation/              # Automated test and validation scripts
-    ├── physical_validation.py
-    ├── validate.py
-    └── validation_outputs/
-=======
 ├── collision/               # Collision simulation runner & pipeline
 │   ├── config.json          # Default configuration for collision runs
 │   ├── run.py               # Script to run a single collision configuration
@@ -145,26 +128,22 @@ janus/
 └── validation               # Automated test and validation scripts
     ├── physical_validation.py
     └── validate.py
-
->>>>>>> recovery-branch
 ```
+
 
 ---
 
 ## Roadmap
 
 - Implementation of higher-level antimatter transport and storage pipeline:
-<<<<<<< HEAD
   * Magnetic Filtration
   * Cooling
   * Trapping
 - Implementation of optimization algorithms to study antimatter yield
-=======
   * Beam analysis
   * Stochastic and Electron Cooling
   * Trapping
 - Continued development of optimization frameworks for transport efficiency and antimatter yield
->>>>>>> recovery-branch
 
 ---
 
