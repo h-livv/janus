@@ -6,12 +6,21 @@ A stochastic framework for simulating and optimizing particle generation, with a
 
 ## Bombardment of a Tungsten cylinder with protons accelerated to 26 GeV
 
-<img width="500" height="400" alt="image" src="https://github.com/user-attachments/assets/3d2de231-3db6-4768-8cbb-384f577c836a" />
+<img width="500" height="400" alt="bombardment" src="https://github.com/user-attachments/assets/3d2de231-3db6-4768-8cbb-384f577c836a" />
 
 <br>
 
 ---
 
+<<<<<<< HEAD
+=======
+## Transport pipeline featuring magnetic filtration
+
+<img width="500" height="400" alt="pipeline" src="" />
+
+---
+
+>>>>>>> recovery-branch
 ## Validation Studies
 
 `validation/` automatically verifies the physical accuracy of the generated outputs before the batch moves further down the pipeline.
@@ -28,39 +37,65 @@ A stochastic framework for simulating and optimizing particle generation, with a
   * Energy spectra
 
 Detailed validation study with outputs is available in [docs/validation_study.md](docs/validation_study.md).<br><br>
+<<<<<<< HEAD
 This study verifies that the Janus physics engine satisfies conservation laws, statistical benchmarks, and phenomenological validation criteria, providing confidence in the generated data for downstream applications.
+=======
+The validation framework verifies conservation laws, statistical benchmarks, and phenomenological observables, providing confidence in generated datasets before transport and optimization studies.
+
+---
+
+## Transport Optimization studies
+
+[docs/optimization_exploration.md](docs/optimization_exploration.md) consists of an inital optimization framework for antiproton transport withing Janus.<br>
+
+A deterministic transport model consisting of a magnetic horn and quadrupoles was successfully optimized and generalized using a hybrid Differential Evolution + Nelder-Mead strategy.<br>
+
+Observations:
+* Local optimization alone is insufficient for highly discontinuous transport landscapes.
+* Global exploration is essential for identifying high-quality beamline configurations.
+* Excessive horn currents do not necessarily maximize transport efficiency.
+
+Results:
+* The model was trained on momentum-cut ~1000 antiprotons and tested on ~400 antiprotons with unseen trajectories.
+* Achieved **54.26%** survival on the training set and **53.42%** on the testing set.
+
+These results establish a strong baseline for future Janus transport studies involving realistic magnetic field models, stochastic interactions, cooling systems, trap injection, and full antimatter storage pipelines.
+>>>>>>> recovery-branch
 
 ---
 
 ## Current Capabilities
 
-Environment configurations
-- World, Chamber, and Target material
-- Target shape, width, and position
+### Geant4 Simulation Engine
+- Configurable target, materials, and geometry
+- Custom beam profiles and energy distributions
+- Physics list selection (FTFP_BERT, QGSP_BIC)
+- Secondary particle generation and filtering
+- Multithreaded batch execution
 
-Beam configuration
-- Particle (Proton, Neutron, etc.)
-- Particle count
-- Beam profile and radius
-- Direction and offset
-- Energy distribution
+### Dataset Generation
+- Automated simulation orchestration
+- HDF5 and NPZ dataset generation
+- Large-scale Monte Carlo runs
+- Species and momentum filtering pipelines
 
-Output filters
-- Antimatter
-- Light particle filtration
-- Save secondaries
-- Record mode (Birth, Hit, Track)
+### Transport Pipeline
+- Relativistic Boris particle tracking
+- Magnetic horn
+- Dipoles, quadrupoles, drifts, and septa
+- ACOL-inspired antiproton injection lattice
+- Beam loss and aperture modelling
 
-Run settings
-- Interactive mode
-- Customizable physics list (FTFP_BERT, QGSP_BIC)
-- Production and tracking cuts
-- Custom seed
-- Custom thread input
+### Optimization & Diagnostics
+- Injection efficiency optimization
+- Beam envelope and phase-space diagnostics
+- Dispersion and loss-map analysis
+- Interactive beamline visualization
 
 ---
 
 ## Module overview
+
 
 ```
 janus/
@@ -76,6 +111,7 @@ janus/
 │   ├── macros/              # Geant4 macro scripts (.mac)
 │   └── src/                 # C++ source code (.cc)
 │
+<<<<<<< HEAD
 ├── interface/               # Python interface and data pipeline
 │   ├── config.json          # Default configuration for runs
 │   ├── run.py               # Script to run a single configuration
@@ -88,6 +124,29 @@ janus/
     ├── physical_validation.py
     ├── validate.py
     └── validation_outputs/
+=======
+├── collision/               # Collision simulation runner & pipeline
+│   ├── config.json          # Default configuration for collision runs
+│   ├── run.py               # Script to run a single collision configuration
+│   ├── run_batches.py       # Script to execute multiple batches consecutively
+│   └── dependencies/        # Collision pipeline logic and interface utilities
+│
+├── transport/               # Transport simulation runner & pipeline
+│   ├── config.json          # Default configuration for transport runs
+│   ├── config_headless.json # Headless configuration for transport runs
+│   ├── main.py              # Main entry point for transport simulation
+│   └── dependencies/        # Transport solver, lattice, diagnostics, and viewport logic
+│       ├── boris_solver.py  # Boris algorithm solver
+│       ├── data_io.py       # I/O utilities for transport datasets
+│       ├── diagnostics.py   # Simulation diagnostics
+│       ├── lattice.py       # Lattice and field definitions
+│       └── viewport.py      # Visualization viewport interface
+│
+└── validation               # Automated test and validation scripts
+    ├── physical_validation.py
+    └── validate.py
+
+>>>>>>> recovery-branch
 ```
 
 ---
@@ -95,10 +154,17 @@ janus/
 ## Roadmap
 
 - Implementation of higher-level antimatter transport and storage pipeline:
+<<<<<<< HEAD
   * Magnetic Filtration
   * Cooling
   * Trapping
 - Implementation of optimization algorithms to study antimatter yield
+=======
+  * Beam analysis
+  * Stochastic and Electron Cooling
+  * Trapping
+- Continued development of optimization frameworks for transport efficiency and antimatter yield
+>>>>>>> recovery-branch
 
 ---
 

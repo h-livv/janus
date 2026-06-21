@@ -7,21 +7,24 @@
 /run/particle/verbose 0
 /janus/det/setWorldMaterial G4_Galactic
 /janus/det/setChamberMaterial G4_AIR
+/janus/det/setChamberWidth 40.0 cm
+/janus/det/setChamberLength 120.0 cm
 /janus/det/setTargetShape Cylinder
-/janus/det/setTargetMaterial G4_W
-/janus/det/setTargetWidth 10 cm
-/janus/det/setTargetPosition 0 0 0 cm
+/janus/det/setTargetMaterial G4_Ir
+/janus/det/setTargetWidth 3.0 mm
+/janus/det/setTargetLength 55 mm
+/janus/det/setTargetPosition 0 0 +25.0 cm
 /janus/output/setFilter 0
 /janus/output/setLightFilter 1
 /run/numberOfThreads 12
 /run/initialize
 /janus/tracking/saveSecondaries true
-/janus/tracking/recordMode Birth
+/janus/tracking/recordMode Hit
 /gun/particle proton
 /gun/beam/profile Gaussian
-/gun/beam/sigma 1 cm
+/gun/beam/sigma 0.5 mm
 /gun/beam/direction 0 0 1
-/gun/beam/offset 0 0 -10 cm
+/gun/beam/offset 0 0 0 cm
 /gun/beam/energyDist Mono
 /gun/beam/energyMean 26 GeV
 /vis/open OGL
@@ -64,7 +67,11 @@
 /gui/addButton run "Run 10 events" "/run/beamOn 10"
 /gui/addButton run "Run 100 events" "/run/beamOn 100"
 /gui/addButton run "Run 1000 events" "/run/beamOn 1000"
+<<<<<<< HEAD
 /gui/addButton run "Run Configured Beam (100)" "/run/beamOn 100"
+=======
+/gui/addButton run "Run Configured Beam (10000)" "/run/beamOn 10000"
+>>>>>>> recovery-branch
 /gui/addButton run "Clear Screen" "/vis/viewer/clear"
 /vis/viewer/set/autoRefresh true
 /vis/verbose warnings

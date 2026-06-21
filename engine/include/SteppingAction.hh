@@ -21,6 +21,8 @@ class SteppingAction : public G4UserSteppingAction
     ~SteppingAction() override;
 
     void UserSteppingAction(const G4Step*) override;
+    
+    G4String GetRecordMode() const { return fRecordMode; }
 
   private:
     EventAction* fEventAction = nullptr;
