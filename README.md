@@ -6,96 +6,142 @@ A stochastic framework for simulating and optimizing particle generation, with a
 
 ## Bombardment of a Tungsten cylinder with protons accelerated to 26 GeV
 
-<img width="500" height="400" alt="image" src="https://github.com/user-attachments/assets/3d2de231-3db6-4768-8cbb-384f577c836a" />
+<img width="500" height="400" alt="bombardment" src="https://github.com/user-attachments/assets/3d2de231-3db6-4768-8cbb-384f577c836a" />
 
 <br>
 
 ---
 
-## Results
+## Transport pipeline featuring magnetic filtration
 
-Early results already demonstrate antiproton generation from proton bombardment of dense metal targets.
-
-<img width="700" height="219" alt="image" src="https://github.com/user-attachments/assets/6f971a6a-d240-40dd-a7f9-cf0c3764abcc" />
-
-<br>
-<br>
-
-Other interesting observations include:
-- Charmed particles such as the anti-Sigma-c, anti-Lambda-c, and D0 meson
-- anti-Omega anti-baryon. <br>
-<img width="700" height="98" alt="image" src="https://github.com/user-attachments/assets/16d3f475-dd70-457a-a17c-9cfb31ba9b49" />
+<img width="500" height="400" alt="pipeline" src="" />
 
 ---
 
 ## Validation Studies
 
-Coming soon
+`validation/` automatically verifies the physical accuracy of the generated outputs before the batch moves further down the pipeline.
+
+- **`validate.py`:** Evaluates event-by-event fundamental physics laws.
+  * Kinematic conservation (Energy/Momentum)
+  * Quantum Number conservation (Charge/Baryon)
+  * Statistical sanity checks (Total antinucleons, global Baryon conservation)
+
+- **`physical_validation.py`:** Generates diagnostic physics plots saved directly to `validation_outputs/`.
+  * Momentum mapping
+  * Pion multiplicity
+  * Vertex distribution
+  * Energy spectra
+
+Detailed validation study with outputs is available in [docs/validation_study.md](docs/validation_study.md).<br><br>
+The validation framework verifies conservation laws, statistical benchmarks, and phenomenological observables, providing confidence in generated datasets before transport and optimization studies.
+
+---
+
+## Transport Optimization studies
+
+[docs/optimization_exploration.md](docs/optimization_exploration.md) consists of an inital optimization framework for antiproton transport withing Janus.<br>
+
+A deterministic transport model consisting of a magnetic horn and quadrupoles was successfully optimized and generalized using a hybrid Differential Evolution + Nelder-Mead strategy.<br>
+
+Observations:
+* Local optimization alone is insufficient for highly discontinuous transport landscapes.
+* Global exploration is essential for identifying high-quality beamline configurations.
+* Excessive horn currents do not necessarily maximize transport efficiency.
+
+Results:
+* The model was trained on momentum-cut ~1000 antiprotons and tested on ~400 antiprotons with unseen trajectories.
+* Achieved **54.26%** survival on the training set and **53.42%** on the testing set.
+
+These results establish a strong baseline for future Janus transport studies involving realistic magnetic field models, stochastic interactions, cooling systems, trap injection, and full antimatter storage pipelines.
 
 ---
 
 ## Current Capabilities
 
-Environment configurations
-- World, Chamber, and Target material
-- Target shape, width, and position
+### Geant4 Simulation Engine
+- Configurable target, materials, and geometry
+- Custom beam profiles and energy distributions
+- Physics list selection (FTFP_BERT, QGSP_BIC)
+- Secondary particle generation and filtering
+- Multithreaded batch execution
 
-Beam configuration
-- Particle (Proton, Neutron, etc.)
-- Particle count
-- Beam profile and radius
-- Direction and offset
-- Energy distribution
+### Dataset Generation
+- Automated simulation orchestration
+- HDF5 and NPZ dataset generation
+- Large-scale Monte Carlo runs
+- Species and momentum filtering pipelines
 
-Output filters
-- Antimatter
-- Light particle filtration
-- Save secondaries
-- Record mode (Birth, Hit, Track)
+### Transport Pipeline
+- Relativistic Boris particle tracking
+- Magnetic horn
+- Dipoles, quadrupoles, drifts, and septa
+- ACOL-inspired antiproton injection lattice
+- Beam loss and aperture modelling
 
-Run settings
-- Interactive mode
-- Customizable physics list (FTFP_BERT, QGSP_BIC)
-- Production and tracking cuts
-- Custom seed
-- Custom thread input
+### Optimization & Diagnostics
+- Injection efficiency optimization
+- Beam envelope and phase-space diagnostics
+- Dispersion and loss-map analysis
+- Interactive beamline visualization
 
 ---
 
 ## Module overview
 
+
 ```
 janus/
+├── README.md                # Project documentation
 │
-├── engine/                  # Primary physics engine powered by Geant4
-│   ├── src/                 # Source files
-│   ├── include/             # Header files
-│   ├── macros/              # Macros
-│   ├── janus.cc             # Main file
-├── python/             
-│   ├── interface.py         # Python interface and data pipeline
-│   ├── run.py               # Run the python interface
-│   ├── run_batches.py       # Run multiple batches
+├── docs/                    # Documentation directory
 │
-└── README.md                # Project documentation
+├── engine/                  # C++ Geant4 Simulation Engine
+│   ├── CMakeLists.txt       # CMake configuration
+│   ├── build/               # Build directory containing compiled binaries
+│   ├── include/             # C++ header files (.hh)
+│   ├── janus.cc             # Main entry point for the simulation
+│   ├── macros/              # Geant4 macro scripts (.mac)
+│   └── src/                 # C++ source code (.cc)
+│
+├── collision/               # Collision simulation runner & pipeline
+│   ├── config.json          # Default configuration for collision runs
+│   ├── run.py               # Script to run a single collision configuration
+│   ├── run_batches.py       # Script to execute multiple batches consecutively
+│   └── dependencies/        # Collision pipeline logic and interface utilities
+│
+├── transport/               # Transport simulation runner & pipeline
+│   ├── config.json          # Default configuration for transport runs
+│   ├── config_headless.json # Headless configuration for transport runs
+│   ├── main.py              # Main entry point for transport simulation
+│   └── dependencies/        # Transport solver, lattice, diagnostics, and viewport logic
+│       ├── boris_solver.py  # Boris algorithm solver
+│       ├── data_io.py       # I/O utilities for transport datasets
+│       ├── diagnostics.py   # Simulation diagnostics
+│       ├── lattice.py       # Lattice and field definitions
+│       └── viewport.py      # Visualization viewport interface
+│
+└── validation               # Automated test and validation scripts
+    ├── physical_validation.py
+    └── validate.py
+
 ```
 
 ---
 
 ## Roadmap
 
-- Refinement of data pipeline: shift from csv to a more efficient format.
 - Implementation of higher-level antimatter transport and storage pipeline:
-  * Magnetic Filtration
-  * Cooling and speed reduction
+  * Beam analysis
+  * Stochastic and Electron Cooling
   * Trapping
-- Integration of machine learning to optimize antimatter production.
+- Continued development of optimization frameworks for transport efficiency and antimatter yield
 
 ---
 
 ## Acknowledgements
 
-The core physics engine of Janus is built upon the Geant4 simulation toolkit. If you utilize this framework for academic or research purposes, please ensure you cite the following foundational Geant4 papers:
+The core physics engine of Janus is built upon the Geant4 simulation toolkit. If you utilize this framework for academic or research purposes, ensure you cite the following resources:
 
 [Recent Developments in Geant4](https://www.sciencedirect.com/science/article/pii/S0168900216306957), J. Allison et al., Nucl. Instrum. Meth. A 835 (2016) 186-225<br>
 [Geant4 Developments and Applications](https://ieeexplore.ieee.org/document/1610988), J. Allison et al., IEEE Trans. Nucl. Sci. 53 (2006) 270-278<br>

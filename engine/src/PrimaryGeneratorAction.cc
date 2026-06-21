@@ -25,8 +25,8 @@ PrimaryGeneratorAction::PrimaryGeneratorAction()
     fParticleGun->SetParticleDefinition(particle);
 
     // Initial Defaults
-    fBeamRadius = 1.0 * cm;
-    fBeamSigma = 0.5 * cm;
+    fBeamRadius = 1.0 * mm;
+    fBeamSigma = 0.5 * mm;
     fBeamDirection = G4ThreeVector(0., 0., 1.);
     fBeamOffset = G4ThreeVector(0., 0., 0.);
     fBeamProfile = "Flat"; // "Flat", "Gaussian", or "Point"

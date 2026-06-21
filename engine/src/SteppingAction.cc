@@ -8,6 +8,9 @@
 #include "G4SystemOfUnits.hh"
 #include "G4GenericMessenger.hh"
 #include "G4NucleiProperties.hh"
+#include "G4AnalysisManager.hh"
+#include "G4RunManager.hh"
+#include "G4Event.hh"
 
 namespace janus
 {
@@ -51,6 +54,43 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     if (fTrackingCut > 0.0 && track->GetKineticEnergy() < fTrackingCut) 
     {
         track->SetTrackStatus(fStopAndKill);
+    }
+
+    // --- Boundary Capture for "Hit" Mode ---
+    if (fRecordMode == "Hit") {
+        auto prePoint = step->GetPreStepPoint();
+        auto postPoint = step->GetPostStepPoint();
+        
+        if (prePoint && postPoint && 
+            prePoint->GetPhysicalVolume() && postPoint->GetPhysicalVolume()) 
+        {
+            if (prePoint->GetPhysicalVolume()->GetName() == "Target" &&
+                postPoint->GetPhysicalVolume()->GetName() == "Chamber") 
+            {
+                auto analysisManager = G4AnalysisManager::Instance();
+                
+                G4int eventID = G4RunManager::GetRunManager()->GetCurrentEvent()->GetEventID();
+                G4int trackID = track->GetTrackID();
+                G4int pdgCode = track->GetDefinition()->GetPDGEncoding();
+                
+                // We want the kinematics exactly at the boundary crossing!
+                // The PostStepPoint represents the exact boundary intersection geometry
+                G4ThreeVector pos = postPoint->GetPosition();
+                G4ThreeVector mom = postPoint->GetMomentum();
+                
+                analysisManager->FillNtupleIColumn(1, 0, eventID);
+                analysisManager->FillNtupleIColumn(1, 1, trackID);
+                analysisManager->FillNtupleIColumn(1, 2, pdgCode);
+                analysisManager->FillNtupleDColumn(1, 3, pos.x());
+                analysisManager->FillNtupleDColumn(1, 4, pos.y());
+                analysisManager->FillNtupleDColumn(1, 5, pos.z());
+                analysisManager->FillNtupleDColumn(1, 6, mom.x());
+                analysisManager->FillNtupleDColumn(1, 7, mom.y());
+                analysisManager->FillNtupleDColumn(1, 8, mom.z());
+                
+                analysisManager->AddNtupleRow(1);
+            }
+        }
     }
 
     // --- Primary particle kinematics for Validation ---

@@ -1,0 +1,37 @@
+{
+    "environment": {
+        "world_material": "G4_Galactic",
+        "chamber_material": "G4_AIR",
+        "target_shape": "Cylinder",
+        "target_material": "G4_Ir",
+        "target_width": "3.0 mm",
+        "target_length": "55 mm",
+        "target_position": "0 0 +25.0 cm"
+    },
+    "beam": {
+        "particle": "proton",
+        "count": 10000,
+        "profile": "Gaussian",
+        "radius": "1.0 mm",
+        "sigma": "0.5 mm",
+        "direction": "0 0 1",
+        "offset": "0 0 0 cm",
+        "energy_dist": "Mono",
+        "energy_mean": "26 GeV",
+        "energy_sigma": "26 GeV"
+    },
+    "output": {
+        "filter": "All",
+        "drop_light_particles": false,
+        "save_secondaries": true,
+        "record_mode": "Hit"
+    },
+    "run_settings": {
+        "interactive": true,
+        "physics_list": "FTFP_BERT",
+        "production_cut": null,
+        "tracking_cut": null,
+        "seed": null,
+        "threads": 12
+    }
+}

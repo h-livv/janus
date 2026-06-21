@@ -31,9 +31,12 @@ class DetectorMessenger : public G4UImessenger
 
     G4UIcmdWithAString* fWorldMatCmd;
     G4UIcmdWithAString* fChamberMatCmd;
+    G4UIcmdWithADoubleAndUnit* fChamberWidthCmd;
+    G4UIcmdWithADoubleAndUnit* fChamberLengthCmd;
     G4UIcmdWithAString* fTargetMatCmd;
     G4UIcmdWithAString* fTargetShapeCmd;
     G4UIcmdWithADoubleAndUnit* fTargetWidthCmd;
+    G4UIcmdWithADoubleAndUnit* fTargetLengthCmd;
     G4UIcmdWith3VectorAndUnit* fTargetPosCmd;
     G4UIcmdWithoutParameter* fUpdateCmd;
 };

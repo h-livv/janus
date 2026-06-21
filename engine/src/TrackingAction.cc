@@ -7,6 +7,7 @@
 #include "G4VProcess.hh"
 #include "G4NucleiProperties.hh"
 #include "G4Ions.hh"
+#include "SteppingAction.hh"
 
 namespace janus
 {
@@ -15,8 +16,13 @@ TrackingAction::TrackingAction() : G4UserTrackingAction() {}
 
 void TrackingAction::PreUserTrackingAction(const G4Track* track)
 {
+    auto steppingAction = dynamic_cast<const SteppingAction*>(
+        G4RunManager::GetRunManager()->GetUserSteppingAction());
+        
+    G4String recordMode = steppingAction ? steppingAction->GetRecordMode() : "Birth";
+
     // Capture seeds at exactly step 0 / t=0
-    if (track->GetCurrentStepNumber() == 0) {
+    if (track->GetCurrentStepNumber() == 0 && recordMode == "Birth") {
     
 #if 1
         auto analysisManager = G4AnalysisManager::Instance();
