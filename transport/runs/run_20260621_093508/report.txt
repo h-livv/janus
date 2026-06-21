@@ -1,0 +1,7 @@
+Time: 150.0 ns
+Distance traveled: 44.6829 m
+Particles alive: 35
+Particles died: 9965
+Cause of annihilation:
+Chamber wall - 3000
+Pipe wall - 6965

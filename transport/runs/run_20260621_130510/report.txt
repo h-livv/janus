@@ -1,0 +1,10 @@
+Time: 150.0 ns
+Distance traveled: 10.0141 m
+Particles alive: 0
+Particles died: 50
+Cause of loss:
+  Dump: 18
+  Chamber wall: 3
+  Aperture rejected: 13
+  Pipe wall: 16
+  Survived: 0

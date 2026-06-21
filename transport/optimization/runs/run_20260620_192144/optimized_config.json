@@ -1,0 +1,94 @@
+{
+    "config": {
+        "calibration_mode": false,
+        "reference_p_gevc": 3.57,
+        "R_PIPE": 0.075,
+        "dt_visual": 2e-12,
+        "emission_rate": 2,
+        "beam_distribution": {
+            "use_hdf5": true,
+            "mock": {
+                "N_particles": 25,
+                "mu_x": 0.0,
+                "sigma_x": 0.05,
+                "mu_y": 0.0,
+                "sigma_y": 0.05,
+                "mu_vx": 0.0,
+                "sigma_vx": 5000.0,
+                "mu_vy": 0.0,
+                "sigma_vy": 5000.0,
+                "mu_vz": 284802835.0,
+                "sigma_vz": 10000.0
+            }
+        }
+    },
+    "lattice": {
+        "injection_elements": [
+            {
+                "type": "MagneticHorn",
+                "L": 0.5,
+                "I": -274260.37727910094
+            },
+            {
+                "type": "Drift",
+                "L": 0.1
+            },
+            {
+                "type": "Quadrupole",
+                "L": 0.4,
+                "K": 6.613541389917668
+            },
+            {
+                "type": "Drift",
+                "L": 0.2
+            },
+            {
+                "type": "Quadrupole",
+                "L": 0.4,
+                "K": -5.9952320995030135
+            },
+            {
+                "type": "Drift",
+                "L": 0.6
+            },
+            {
+                "type": "Quadrupole",
+                "L": 0.3,
+                "K": 5.056038594873776
+            },
+            {
+                "type": "Drift",
+                "L": 0.2
+            },
+            {
+                "type": "Quadrupole",
+                "L": 0.3,
+                "K": 0.06655201720967364
+            },
+            {
+                "type": "Drift",
+                "L": 0.4
+            }
+        ],
+        "periodic_elements": [
+            {
+                "type": "Quadrupole",
+                "L": 0.5,
+                "K": -2.5
+            },
+            {
+                "type": "Drift",
+                "L": 0.5
+            },
+            {
+                "type": "Quadrupole",
+                "L": 0.5,
+                "K": 2.5
+            },
+            {
+                "type": "Drift",
+                "L": 0.5
+            }
+        ]
+    }
+}

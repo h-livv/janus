@@ -1,0 +1,37 @@
+Time: 170.0 ns
+Distance traveled: 48.4654 m
+Particles alive: 0
+Particles died: 64308
+Cause of loss:
+Dump: 0, 0
+Chamber wall: 0, 0
+Filtration: 0, 0
+Pipe wall: 159, 64012
+Survived: 137, 0
+
+Element      p̄     p
+------------------------
+Target      296   64012
+Lens        296   64012
+QFO0050     296   64012
+QDE0055     296   64012
+BHZ0058     294   62829
+QFO0060     285       0
+QDE0065     149       0
+QFO0070     149       0
+QDE0075     137       0
+QFO0080     137       0
+QDE0085     137       0
+BHZ0088     137       0
+QFO0090     137       0
+QDS0095     137       0
+Septum      137       0
+
+initial antiproton count: 296
+antiprotons survived: 0
+antiprotons annihilated: 296
+antiproton survival rate: 0.0000
+initial proton count: 64012
+positive particles survived: 0
+positive particles annihilated: 64012
+positive particles survival rate: 0.0000

@@ -1,0 +1,92 @@
+{
+    "config": {
+        "mode": "visual",
+        "headless_time_ns": 150.0,
+        "calibration_mode": true,
+        "reference_p_gevc": 3.57,
+        "R_PIPE": 0.3,
+        "dt_visual": 2e-12,
+        "emission_rate": 2,
+        "beam_distribution": {
+            "use_hdf5": false,
+            "mock": {
+                "N_particles": 50,
+                "charge_ratio": {
+                    "antiproton": 0.6,
+                    "proton": 0.4
+                },
+                "mu_x": 0.0,
+                "sigma_x": 0.05,
+                "mu_y": 0.0,
+                "sigma_y": 0.05,
+                "mu_vx": 0.0,
+                "sigma_vx": 5000.0,
+                "mu_vy": 0.0,
+                "sigma_vy": 5000.0,
+                "mu_vz": 284802835.0,
+                "sigma_vz": 10000.0
+            }
+        }
+    },
+    "dipole_chamber": {
+        "length": 10.0,
+        "width": 3.0,
+        "height": 3.0,
+        "field_strength": 0.13328402531129713,
+        "acceptance_aperture_radius": 0.3959660967146057,
+        "acceptance_aperture_x_offset": -0.5,
+        "dump": {
+            "length": 2.0,
+            "width": 0.3,
+            "height": 0.3,
+            "position_z": 6.0,
+            "x_offset": 0.3
+        }
+    },
+    "matching_section": {
+        "start_z": 10.0,
+        "end_z": 25.0,
+        "aperture_radius": 0.35,
+        "quadrupoles": [
+            {
+                "z": 11.0,
+                "length": 0.5,
+                "gradient": 12.0
+            },
+            {
+                "z": 13.0,
+                "length": 0.5,
+                "gradient": -10.0
+            },
+            {
+                "z": 15.5,
+                "length": 0.5,
+                "gradient": 8.0
+            },
+            {
+                "z": 18.0,
+                "length": 0.5,
+                "gradient": -7.0
+            },
+            {
+                "z": 21.0,
+                "length": 0.5,
+                "gradient": 6.0
+            },
+            {
+                "z": 23.5,
+                "length": 0.5,
+                "gradient": -5.0
+            }
+        ]
+    },
+    "fodo_lattice": {
+        "start_z": 25.0,
+        "end_z": 50.0,
+        "cell_length": 4.0,
+        "focusing_gradient": 8.0,
+        "defocusing_gradient": -8.0,
+        "quad_length": 0.5,
+        "drift_length": 1.5
+    }
+}
