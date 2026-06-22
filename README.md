@@ -149,7 +149,7 @@ janus/
 
 ## Acknowledgements
 
-The core physics engine of Janus is built upon the Geant4 simulation toolkit. If you utilize this framework for academic or research purposes, ensure you cite the following resources:
+The core collision engine of Janus is built upon the Geant4 simulation toolkit. If you utilize this framework for academic or research purposes, ensure you cite the following resources:
 
 [Recent Developments in Geant4](https://www.sciencedirect.com/science/article/pii/S0168900216306957), J. Allison et al., Nucl. Instrum. Meth. A 835 (2016) 186-225<br>
 [Geant4 Developments and Applications](https://ieeexplore.ieee.org/document/1610988), J. Allison et al., IEEE Trans. Nucl. Sci. 53 (2006) 270-278<br>
