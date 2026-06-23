@@ -10,25 +10,25 @@ def evaluate_beam_filter(params, R_init, V_init, gamma_init, charges, machine, c
     local_machine = copy.deepcopy(machine)
     
     # 2. Apply the optimizer's parameters to the LOCAL copy
-    horn_I, dipole_By, aperture_r = params
+    horn_I, dipole_By, aperture_x_offset = params
+    
     # --- HARD BOUNDARY ENFORCEMENT ---
     if not (-400000.0 <= horn_I <= 400000.0) or \
        not (0.0 <= dipole_By <= 2.0) or \
-       not (0.05 <= aperture_r <= 0.15):
+       not (-0.3 <= aperture_x_offset <= 0.3):
         return 1e15 # Return an "infinite" cost to repel the simplex
 
-    # Inside evaluate_beam_filter, after unpacking x:
     if horn_I > 390000 or horn_I < -390000:
         print(f"[Warning] Optimizer pushing Horn Current to boundary: {horn_I:.0f} A")
     if dipole_By > 1.9 or dipole_By < 0.1:
         print(f"[Warning] Optimizer pushing Dipole field to boundary: {dipole_By:.3f} T")
-    if aperture_r > 0.14 or aperture_r < 0.06:
-        print(f"[Warning] Optimizer pushing Aperture Radius to boundary: {aperture_r:.3f} m")
+    if aperture_x_offset > 0.28 or aperture_x_offset < -0.28:
+        print(f"[Warning] Optimizer pushing Aperture X-Offset to boundary: {aperture_x_offset:.3f} m")
     
     local_machine.prism_elements[horn_idx].I = horn_I
     local_machine.prism_elements[selector_idx].By = dipole_By
     if local_machine.aperture is not None:
-        local_machine.aperture.radius = aperture_r
+        local_machine.aperture.x_offset = aperture_x_offset
 
     # 3. Pass the LOCAL machine into the physics loop
     R_final, _, _, _ = run_physics_loop(
@@ -40,7 +40,7 @@ def evaluate_beam_filter(params, R_init, V_init, gamma_init, charges, machine, c
     machine.prism_elements[horn_idx].I = params[0]
     machine.prism_elements[selector_idx].By = params[1]
     if machine.aperture is not None:
-        machine.aperture.radius = params[2]
+        machine.aperture.x_offset = params[2]
         
     # 2. Reset state
     R = R_init.copy()
@@ -61,7 +61,7 @@ def evaluate_beam_filter(params, R_init, V_init, gamma_init, charges, machine, c
     x_final = R_final[:, 0]
     y_final = R_final[:, 1]
     
-    # A particle survived if it crossed z >= 10.0 and was within the aperture radius
+    # A particle survived if it crossed z >= 10.0 and was within the aperture
     dx_ap = x_final - machine.aperture.x_offset if machine.aperture is not None else x_final
     dy_ap = y_final
     r_from = np.sqrt(dx_ap**2 + dy_ap**2)
@@ -102,8 +102,8 @@ def evaluate_beam_filter(params, R_init, V_init, gamma_init, charges, machine, c
             history["horn_I"] = []
         if "dipole_By" not in history:
             history["dipole_By"] = []
-        if "aperture_r" not in history:
-            history["aperture_r"] = []
+        if "aperture_x_offset" not in history:
+            history["aperture_x_offset"] = []
         if "survival_pbar" not in history:
             history["survival_pbar"] = []
         if "survival_proton" not in history:
@@ -113,7 +113,7 @@ def evaluate_beam_filter(params, R_init, V_init, gamma_init, charges, machine, c
             
         history["horn_I"].append(params[0])
         history["dipole_By"].append(params[1])
-        history["aperture_r"].append(params[2])
+        history["aperture_x_offset"].append(params[2])
         history["survival_pbar"].append(pbar_survival_rate)
         history["survival_proton"].append(proton_survival_rate)
         history["cost"].append(total_cost)

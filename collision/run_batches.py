@@ -3,8 +3,8 @@ from pathlib import Path
 from dependencies.interface import Simulation
 
 def run_production_batches():
-    # Define 10 batches for the overnight run
-    suite = [{"name": f"Batch_{i}"} for i in range(21, 31)]
+    # Define batches
+    suite = [{"name": f"Batch_{i}"} for i in range(55, 121)]
 
     events_per_batch = 100000 # 100k particles per batch
 
@@ -16,7 +16,7 @@ def run_production_batches():
         
         sim = Simulation()
         # Load baseline
-        sim.load_config("config.json")
+        sim.load_config()
         
         # Explicitly enforce 26 GeV and Iridium target
         sim.beam.energy_mean = "26 GeV"

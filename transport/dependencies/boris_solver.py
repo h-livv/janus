@@ -1,9 +1,9 @@
 import numpy as np
 import time
 from transport.dependencies.lattice import (
-    Lattice, _LegacyLattice,
-    Drift, Quadrupole, Sextupole, Octupole, Dipole, MagneticHorn,
-    SelectorDipole, BeamDump, AcceptanceAperture,
+    Lattice,
+    Drift, Quadrupole, Dipole, MagneticHorn,
+    SelectorDipole, AcceptanceAperture,
 )
 
 # ---------------------------------------------------------------------------
@@ -116,41 +116,44 @@ def _check_boundaries_three_zone(R, alive_mask, machine, r_pipe,
 
     # ── Downstream Circular Pipe (z >= 0.5 → fodo_end_z) ────────────────
     in_pipe = (z_vals >= 0.5) & (z_vals < machine.fodo_end_z)
-    if getattr(machine, 'is_acol', False):
-        x_ref, _ = machine.get_reference_trajectory(z_vals)
-        r_match_sq = machine.matching_aperture_radius**2
+    x_ref, _ = machine.get_reference_trajectory(z_vals)
+    r_match_sq = machine.matching_aperture_radius**2
+    
+    is_inside = np.zeros_like(alive_mask, dtype=bool)
+    
+    # 1. Straight pipe before dipole: 0.5 <= z < 8.5
+    before_dipole = (z_vals >= 0.5) & (z_vals < 8.5)
+    if np.any(before_dipole):
+        # Orbit-centered aperture check
+        dx = x_vals[before_dipole] - x_ref[before_dipole]
+        dy = y_vals[before_dipole]
+        is_inside[before_dipole] = (dx**2 + dy**2 < r_match_sq)
+    
+    # 2. Racetrack chamber inside selector dipole: 8.5 <= z < machine.prism_end_z
+    inside_dipole = (z_vals >= 8.5) & (z_vals < machine.prism_end_z)
+    if np.any(inside_dipole):
+        x_ref_dip = x_ref[inside_dipole]
+        x_vals_dip = x_vals[inside_dipole]
+        y_vals_dip = y_vals[inside_dipole]
         
-        is_inside = np.zeros_like(alive_mask, dtype=bool)
+        # Orbit-centered aperture check
+        dx = x_vals_dip - x_ref_dip
+        dy = y_vals_dip
+        is_inside[inside_dipole] = (
+            ((dy**2 < r_match_sq) & (x_vals_dip >= x_ref_dip) & (x_vals_dip <= -x_ref_dip)) |
+            (dx**2 + dy**2 < r_match_sq) |
+            ((x_vals_dip + x_ref_dip)**2 + dy**2 < r_match_sq)
+        )
         
-        # 1. Straight pipe before dipole: 0.5 <= z < 8.5
-        before_dipole = (z_vals >= 0.5) & (z_vals < 8.5)
-        is_inside[before_dipole] = (x_vals[before_dipole]**2 + y_vals[before_dipole]**2 < r_match_sq)
+    # 3. Antiproton pipe after selector dipole: z >= machine.prism_end_z
+    after_dipole = (z_vals >= machine.prism_end_z)
+    if np.any(after_dipole):
+        # Orbit-centered aperture check
+        dx = x_vals[after_dipole] - x_ref[after_dipole]
+        dy = y_vals[after_dipole]
+        is_inside[after_dipole] = (dx**2 + dy**2 < r_match_sq)
         
-        # 2. Racetrack chamber inside selector dipole: 8.5 <= z < machine.prism_end_z
-        inside_dipole = (z_vals >= 8.5) & (z_vals < machine.prism_end_z)
-        if np.any(inside_dipole):
-            x_ref_dip = x_ref[inside_dipole]
-            x_vals_dip = x_vals[inside_dipole]
-            y_vals_dip = y_vals[inside_dipole]
-            
-            is_inside[inside_dipole] = (
-                ((y_vals_dip**2 < r_match_sq) & (x_vals_dip >= x_ref_dip) & (x_vals_dip <= -x_ref_dip)) |
-                ((x_vals_dip - x_ref_dip)**2 + y_vals_dip**2 < r_match_sq) |
-                ((x_vals_dip + x_ref_dip)**2 + y_vals_dip**2 < r_match_sq)
-            )
-            
-        # 3. Antiproton pipe after selector dipole: z >= machine.prism_end_z
-        after_dipole = (z_vals >= machine.prism_end_z)
-        if np.any(after_dipole):
-            is_inside[after_dipole] = ((x_vals[after_dipole] - x_ref[after_dipole])**2 + y_vals[after_dipole]**2 < r_match_sq)
-            
-        outside_pipe = (~is_inside) & in_pipe & alive_mask
-    else:
-        x_offset = machine.aperture.x_offset if machine.aperture is not None else 0.0
-        x_ref = np.full_like(z_vals, x_offset)
-        r_sq = (x_vals - x_ref)**2 + y_vals**2
-        r_match_sq = machine.matching_aperture_radius**2
-        outside_pipe = (r_sq >= r_match_sq) & in_pipe & alive_mask
+    outside_pipe = (~is_inside) & in_pipe & alive_mask
 
     if np.any(outside_pipe):
         _kill_particles(outside_pipe, R, alive_mask, death_causes,
@@ -160,10 +163,7 @@ def _check_boundaries_three_zone(R, alive_mask, machine, r_pipe,
     if machine.aperture is not None:
         just_crossed = (~passed_aperture_mask) & (z_vals >= machine.aperture.z_plane) & alive_mask
         if np.any(just_crossed):
-            if getattr(machine, 'is_acol', False):
-                x_ref_ap, _ = machine.get_reference_trajectory(machine.aperture.z_plane)
-            else:
-                x_ref_ap = machine.aperture.x_offset
+            x_ref_ap, _ = machine.get_reference_trajectory(machine.aperture.z_plane)
             dx      = x_vals[just_crossed] - x_ref_ap
             dy      = y_vals[just_crossed]
             r_from  = np.sqrt(dx**2 + dy**2)
@@ -182,6 +182,7 @@ def _check_boundaries_three_zone(R, alive_mask, machine, r_pipe,
             passed_aperture_mask[just_crossed] = True
 
     # ── Transport exit (z >= fodo_end_z) ─────────────────────────────────
+    # Collector Ring injection plane is at fodo_end_z
     exited = (z_vals >= machine.fodo_end_z) & alive_mask
     if np.any(exited):
         for idx in np.where(exited)[0]:
@@ -202,63 +203,6 @@ def _check_boundaries_three_zone(R, alive_mask, machine, r_pipe,
 
     return alive_mask
 
-
-def _check_boundaries_legacy(R, alive_mask, machine, r_pipe,
-                              death_causes, annihilation_queue=None, headless=False, charges=None):
-    """
-    Original boundary detection for the legacy two-zone lattice.
-    Preserved verbatim from the prior boris_solver to ensure zero regression.
-    """
-    r_sq   = R[:, 0]**2 + R[:, 1]**2
-    z_vals = R[:, 2]
-
-    r_max_sq = np.full_like(z_vals, r_pipe**2)
-
-    all_elements = machine.injection_elements + machine.periodic_elements
-    for el in all_elements:
-        if isinstance(el, MagneticHorn):
-            horn_start = el.z_start
-            horn_end   = el.z_end
-
-            in_chamber_early = (z_vals >= -0.60) & (z_vals < horn_start)
-            r_max_sq[in_chamber_early] = 0.35**2
-
-            in_horn = (z_vals >= horn_start) & (z_vals <= horn_end)
-            if np.any(in_horn):
-                z_in_horn  = z_vals[in_horn]
-                fraction   = (z_in_horn - horn_start) / (horn_end - horn_start)
-                tapered_r  = 0.35 - fraction * (0.35 - r_pipe)
-                r_max_sq[in_horn] = tapered_r**2
-
-    dead_now = (r_sq >= r_max_sq) & alive_mask
-    if np.any(dead_now):
-        dead_indices = np.where(dead_now)[0]
-        for idx in dead_indices:
-            z = z_vals[idx]
-            horn_end_z = 0.0
-            for el in all_elements:
-                if isinstance(el, MagneticHorn):
-                    horn_end_z = el.z_end
-            if -0.60 <= z <= horn_end_z:
-                cause = "Chamber wall"
-            else:
-                cause = "Pipe wall"
-
-            if cause not in death_causes:
-                death_causes[cause] = [0, 0]
-            elif isinstance(death_causes[cause], int):
-                death_causes[cause] = [death_causes[cause], 0]
-
-            chg = charges[idx] if charges is not None else -1
-            if chg == -1:
-                death_causes[cause][0] += 1
-            else:
-                death_causes[cause][1] += 1
-
-        _kill_particles(dead_now, R, alive_mask, death_causes,
-                        None, annihilation_queue, headless, charges)
-
-    return alive_mask
 
 
 def _kill_particles(mask, R, alive_mask, death_causes,
@@ -303,15 +247,11 @@ def run_physics_loop(R, V, gamma, shm_name, sync_queue, annihilation_queue,
     charges : np.ndarray of int8, shape (N,), values {-1, +1}
         Per-particle charge in elementary-charge units.  None → all pbar.
     """
-    is_three_zone = getattr(machine, 'is_three_zone', False)
     r_pipe        = config_dict.get("R_PIPE", 0.10)
 
     # Initialise death-cause dictionary
-    if is_three_zone:
-        death_causes = {"Dump": [0, 0], "Chamber wall": [0, 0], "Aperture rejected": [0, 0],
-                        "Pipe wall": [0, 0], "Survived": [0, 0]}
-    else:
-        death_causes = {"Chamber wall": [0, 0], "Pipe wall": [0, 0]}
+    death_causes = {"Dump": [0, 0], "Chamber wall": [0, 0], "Aperture rejected": [0, 0],
+                    "Pipe wall": [0, 0], "Survived": [0, 0]}
 
     # ── HEADLESS MODE ─────────────────────────────────────────────────────
     if headless:
@@ -351,19 +291,12 @@ def run_physics_loop(R, V, gamma, shm_name, sync_queue, annihilation_queue,
                 return R, V, alive_mask, death_causes
 
             # Boundary checks
-            if is_three_zone:
-                _check_boundaries_three_zone(
-                    R, alive_mask, machine, r_pipe,
-                    passed_aperture_mask, death_causes,
-                    annihilation_queue=None, headless=True,
-                    charges=charges
-                )
-            else:
-                _check_boundaries_legacy(
-                    R, alive_mask, machine, r_pipe,
-                    death_causes, annihilation_queue=None, headless=True,
-                    charges=charges
-                )
+            _check_boundaries_three_zone(
+                R, alive_mask, machine, r_pipe,
+                passed_aperture_mask, death_causes,
+                annihilation_queue=None, headless=True,
+                charges=charges
+            )
 
         return R, V, alive_mask, death_causes
 
@@ -396,20 +329,12 @@ def run_physics_loop(R, V, gamma, shm_name, sync_queue, annihilation_queue,
             )
 
             # Boundary checks
-            if is_three_zone:
-                _check_boundaries_three_zone(
-                    R, alive_mask, machine, r_pipe,
-                    passed_aperture_mask, death_causes,
-                    annihilation_queue=annihilation_queue, headless=False,
-                    charges=charges
-                )
-            else:
-                _check_boundaries_legacy(
-                    R, alive_mask, machine, r_pipe,
-                    death_causes,
-                    annihilation_queue=annihilation_queue, headless=False,
-                    charges=charges
-                )
+            _check_boundaries_three_zone(
+                R, alive_mask, machine, r_pipe,
+                passed_aperture_mask, death_causes,
+                annihilation_queue=annihilation_queue, headless=False,
+                charges=charges
+            )
 
             # Emit to renderer at configured rate
             if step % emission_rate == 0:

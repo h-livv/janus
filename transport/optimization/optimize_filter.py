@@ -46,11 +46,41 @@ def main():
     config_path = os.path.abspath("transport/config.json")
     machine, config_dict = Lattice.load_from_json(config_path)
     
-    # Setup Particles
-    from transport.dependencies.data_io import extract_cern_ad_seeds, get_run_files
-    hdf5_paths = get_run_files(outputs_dir_name="runs", target_filename="simulation.hdf5")
-    # Correctly unpack 4 values (R, V, gamma, charges)
-    R, V, gamma, charges = extract_cern_ad_seeds(hdf5_paths)
+    # --- Setup Particles from NPZ ---
+    npz_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../runs/datasets/simulation_raw.npz"))
+    print(f"[Main] Loading dataset from {npz_path}...")
+    
+    try:
+        dataset = np.load(npz_path)
+        keys = dataset.files
+        
+        # 1. Try explicit names first
+        if 'R' in keys and 'V' in keys and 'gamma' in keys and 'charges' in keys:
+            R = dataset['R']
+            V = dataset['V']
+            gamma = dataset['gamma']
+            charges = dataset['charges']
+            print("[Main] Successfully loaded explicitly named arrays (R, V, gamma, charges).")
+            
+        # 2. Fall back to default positional names (arr_0, arr_1, etc.)
+        elif len(keys) >= 4:
+            print(f"[Main] Explicit names not found. Falling back to positional keys: {keys[:4]}")
+            R = dataset[keys[0]]
+            V = dataset[keys[1]]
+            gamma = dataset[keys[2]]
+            charges = dataset[keys[3]]
+            
+        # 3. Fail gracefully if the file is incomplete
+        else:
+            print(f"[!] Error: NPZ file only contains {len(keys)} arrays: {keys}. Expected 4 (R, V, gamma, charges).")
+            sys.exit(1)
+            
+    except FileNotFoundError:
+        print(f"[!] Error: Could not find {npz_path}. Please check your path.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"[!] Error reading NPZ file: {e}")
+        sys.exit(1)
     
     # --- Downsample protons to reduce dataset size for speed ---
     pbar_mask = (charges == -1)
@@ -105,8 +135,6 @@ def main():
     print(f"[Main] Split {N_total} particles into {len(train_idx)} train and {len(val_idx)} validation.")
     
     # --- Configure Machine to Terminate at z = 10.0 m ---
-    # Zone 1 (Prism) ends at z = 10.0 m. We set matching and fodo z parameters to 10.0 m,
-    # so that particles crossing z = 10.0 m are immediately evaluated and integration stops.
     machine.matching_start_z = 10.0
     machine.matching_end_z = 10.0
     machine.fodo_start_z = 10.0
@@ -121,7 +149,7 @@ def main():
         "survival": [],
         "horn_I": [],
         "dipole_By": [],
-        "aperture_r": [],
+        "aperture_x_offset": [],
         "survival_pbar": [],
         "survival_proton": []
     }
@@ -143,8 +171,8 @@ def main():
         tracker=tracker, lock=lock,
     )
     
-    # Bounds for parameters: [Horn_I (Amps), Dipole_By (Tesla), Aperture_Radius (meters)]
-    bounds = [(-400000.0, 400000.0), (0.0, 2.0), (0.05, 0.15)]
+    # Bounds for parameters: [Horn_I (Amps), Dipole_By (Tesla), Aperture_X_Offset (meters)]
+    bounds = [(-400000.0, 400000.0), (0.0, 2.0), (-0.3, 0.3)]
     
     print("[Optimizer] Stage 1: Starting Global Search (Differential Evolution)...")
     
@@ -168,7 +196,6 @@ def main():
     # --- STAGE 2: Local Refinement ---
     print("\n[Optimizer] Stage 2: Starting Local Refinement (Nelder-Mead)...")
     
-    # Retrieve best from tracker to ensure we start from the true best
     best_x0 = tracker['best_params'] if tracker['best_params'] is not None else result.x
     
     try:
@@ -187,14 +214,14 @@ def main():
     print(f"\n--- Optimization Complete ---")
     print(f"Optimal Horn Current: {final_best_params[0]:.2f} Amps")
     print(f"Optimal Dipole field (By): {final_best_params[1]:.4f} T")
-    print(f"Optimal Aperture Radius: {final_best_params[2]:.4f} m")
+    print(f"Optimal Aperture X-Offset: {final_best_params[2]:.4f} m")
     print(f"Best Cost: {tracker['best_cost']:.4f}")
     
     # --- STAGE 3: Final Validation ---
     machine.prism_elements[horn_idx].I = final_best_params[0]
     machine.prism_elements[selector_idx].By = final_best_params[1]
     if machine.aperture is not None:
-        machine.aperture.radius = final_best_params[2]
+        machine.aperture.x_offset = final_best_params[2]
         
     train_pbar_surv, train_prot_surv, survived_mask_train = run_validation(
         R_train, V_train, gamma_train, charges_train, machine, config_dict
@@ -209,7 +236,6 @@ def main():
     print(f"Validation pbar Survival Rate: {val_pbar_surv * 100:.2f}%")
     print(f"Validation proton Survival Rate: {val_prot_surv * 100:.2f}%")
     
-    # Calculate detailed species statistics on the full dataset
     charges_full = np.concatenate([charges_train, charges_val])
     alive_full = np.concatenate([survived_mask_train, survived_mask_val])
     

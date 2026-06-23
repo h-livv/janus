@@ -78,109 +78,113 @@ def _box_at(view, width, height, depth, cx, cy, cz, color, edge_color):
 
 
 # ---------------------------------------------------------------------------
-# Reference Trajectory Helper
+# Reference Trajectory Factory
 # ---------------------------------------------------------------------------
 
-def _get_reference_trajectory(z):
+def make_trajectory_func(acol_data):
     """
-    Compute the reference trajectory x_ref(z) and tangent angle theta(z)
-    based on the physical layout and bend angles of the dipoles:
-    BHZ0058 (bend angle: -5.48 deg, z range: [8.5, 10.4513] m)
-    BHZ0088 (bend angle:  0.98 deg, z range: [38.5, 40.4513] m)
-    SEPTUM  (bend angle: -7.33 deg, z range: [46.5, 48.4513] m)
+    Builds a dynamic reference trajectory interpolator based on the actual 
+    JSON survey coordinates and bend angles to ensure standard compliance
+    with the new lattice updates.
     """
-    is_scalar = np.isscalar(z)
-    z_arr = np.atleast_1d(z).astype(np.float64)
-    x_ref = np.zeros_like(z_arr)
-    theta = np.zeros_like(z_arr)
+    survey = acol_data.get("survey_coordinates", {})
+    dipoles = acol_data.get("dipoles", {})
+    septum = acol_data.get("septum", {})
     
-    # Bending regions z start and end positions
-    z1, z2 = 8.5, 10.4513
-    z3, z4 = 38.5, 40.4513
-    z5, z6 = 46.5, 48.4513
+    # BHZ0058 Setup
+    z1 = 0.5 + survey.get("BHZ0058", 8.0)
+    L1 = dipoles.get("BHZ0058", {}).get("length", 1.9513)
+    z2 = z1 + L1
+    theta_b1 = dipoles.get("BHZ0058", {}).get("bend_angle_deg", -5.48) * np.pi / 180.0
     
-    # Bend angles in radians
-    theta_b1 = -5.48 * np.pi / 180.0
-    theta_b2 = 0.98 * np.pi / 180.0
-    theta_b3 = -7.33 * np.pi / 180.0
+    # BHZ0088 Setup
+    z3 = 0.5 + survey.get("BHZ0088", 38.0)
+    L2 = dipoles.get("BHZ0088", {}).get("length", 1.9513)
+    z4 = z3 + L2
+    theta_b2 = dipoles.get("BHZ0088", {}).get("bend_angle_deg", 0.98) * np.pi / 180.0
     
-    # Bending rate k (radians per meter)
-    k1 = theta_b1 / (z2 - z1)
-    k2 = theta_b2 / (z4 - z3)
-    k3 = theta_b3 / (z6 - z5)
+    # SEPTUM Setup
+    z5 = 0.5 + survey.get("SEPTUM", 46.0)
+    L3 = septum.get("length", 1.9513)
+    z6 = z5 + L3
+    theta_b3 = septum.get("bend_angle_deg", -7.33) * np.pi / 180.0
     
-    # Reference states at boundary points
+    k1 = theta_b1 / L1 if L1 > 1e-6 else 0.0
+    k2 = theta_b2 / L2 if L2 > 1e-6 else 0.0
+    k3 = theta_b3 / L3 if L3 > 1e-6 else 0.0
+    
     x_z1 = 0.0
     theta_z1 = 0.0
     
     theta_z2 = theta_b1
-    x_z2 = x_z1 - (1.0 / k1) * np.log(np.cos(theta_z2))
+    x_z2 = x_z1 - (1.0 / k1) * np.log(np.cos(theta_z2)) if abs(k1) > 1e-6 else x_z1 + L1 * np.tan(theta_b1/2)
     
     theta_z3 = theta_z2
     x_z3 = x_z2 + (z3 - z2) * np.tan(theta_z2)
     
     theta_z4 = theta_z3 + theta_b2
-    x_z4 = x_z3 - (1.0 / k2) * (np.log(np.cos(theta_z4)) - np.log(np.cos(theta_z3)))
+    x_z4 = x_z3 - (1.0 / k2) * (np.log(np.cos(theta_z4)) - np.log(np.cos(theta_z3))) if abs(k2) > 1e-6 else x_z3 + L2 * np.tan(theta_z3 + theta_b2/2)
     
     theta_z5 = theta_z4
     x_z5 = x_z4 + (z5 - z4) * np.tan(theta_z4)
     
     theta_z6 = theta_z5 + theta_b3
-    x_z6 = x_z5 - (1.0 / k3) * (np.log(np.cos(theta_z6)) - np.log(np.cos(theta_z5)))
+    x_z6 = x_z5 - (1.0 / k3) * (np.log(np.cos(theta_z6)) - np.log(np.cos(theta_z5))) if abs(k3) > 1e-6 else x_z5 + L3 * np.tan(theta_z5 + theta_b3/2)
     
-    # 1. z < z1 (Straight line)
-    mask0 = (z_arr < z1)
-    x_ref[mask0] = 0.0
-    theta[mask0] = 0.0
-    
-    # 2. z1 <= z < z2 (Inside BHZ0058)
-    mask1 = (z_arr >= z1) & (z_arr < z2)
-    if np.any(mask1):
-        theta[mask1] = k1 * (z_arr[mask1] - z1)
-        x_ref[mask1] = x_z1 - (1.0 / k1) * np.log(np.cos(theta[mask1]))
+    def get_reference_trajectory(z):
+        is_scalar = np.isscalar(z)
+        z_arr = np.atleast_1d(z).astype(np.float64)
+        x_ref = np.zeros_like(z_arr)
+        theta = np.zeros_like(z_arr)
         
-    # 3. z2 <= z < z3 (Straight line at angle theta_z2)
-    mask2 = (z_arr >= z2) & (z_arr < z3)
-    if np.any(mask2):
-        theta[mask2] = theta_z2
-        x_ref[mask2] = x_z2 + (z_arr[mask2] - z2) * np.tan(theta_z2)
+        mask0 = (z_arr < z1)
+        x_ref[mask0] = 0.0
+        theta[mask0] = 0.0
         
-    # 4. z3 <= z < z4 (Inside BHZ0088)
-    mask3 = (z_arr >= z3) & (z_arr < z4)
-    if np.any(mask3):
-        theta[mask3] = theta_z3 + k2 * (z_arr[mask3] - z3)
-        x_ref[mask3] = x_z3 - (1.0 / k2) * (np.log(np.cos(theta[mask3])) - np.log(np.cos(theta_z3)))
-        
-    # 5. z4 <= z < z5 (Straight line at angle theta_z4)
-    mask4 = (z_arr >= z4) & (z_arr < z5)
-    if np.any(mask4):
-        theta[mask4] = theta_z4
-        x_ref[mask4] = x_z4 + (z_arr[mask4] - z4) * np.tan(theta_z4)
-        
-    # 6. z >= z5
-    mask5 = (z_arr >= z5)
-    if np.any(mask5):
-        # Inside Septum (z5 <= z < z6)
-        in_sep = mask5 & (z_arr < z6)
-        if np.any(in_sep):
-            theta[in_sep] = theta_z5 + k3 * (z_arr[in_sep] - z5)
-            x_ref[in_sep] = x_z5 - (1.0 / k3) * (np.log(np.cos(theta[in_sep])) - np.log(np.cos(theta_z5)))
-        
-        # Beyond Septum exit (z >= z6)
-        beyond = mask5 & (z_arr >= z6)
-        if np.any(beyond):
-            theta[beyond] = theta_z6
-            x_ref[beyond] = x_z6 + (z_arr[beyond] - z6) * np.tan(theta_z6)
+        mask1 = (z_arr >= z1) & (z_arr < z2)
+        if np.any(mask1):
+            theta[mask1] = k1 * (z_arr[mask1] - z1)
+            x_ref[mask1] = x_z1 - (1.0 / k1) * np.log(np.cos(theta[mask1])) if abs(k1) > 1e-6 else x_z1 + (z_arr[mask1]-z1)*np.tan(theta[mask1]/2)
             
-    if is_scalar:
-        return x_ref[0], theta[0]
-    return x_ref, theta
+        mask2 = (z_arr >= z2) & (z_arr < z3)
+        if np.any(mask2):
+            theta[mask2] = theta_z2
+            x_ref[mask2] = x_z2 + (z_arr[mask2] - z2) * np.tan(theta_z2)
+            
+        mask3 = (z_arr >= z3) & (z_arr < z4)
+        if np.any(mask3):
+            theta[mask3] = theta_z3 + k2 * (z_arr[mask3] - z3)
+            x_ref[mask3] = x_z3 - (1.0 / k2) * (np.log(np.cos(theta[mask3])) - np.log(np.cos(theta_z3))) if abs(k2)>1e-6 else x_z3 + (z_arr[mask3]-z3)*np.tan(theta_z3 + (theta[mask3]-theta_z3)/2)
+            
+        mask4 = (z_arr >= z4) & (z_arr < z5)
+        if np.any(mask4):
+            theta[mask4] = theta_z4
+            x_ref[mask4] = x_z4 + (z_arr[mask4] - z4) * np.tan(theta_z4)
+            
+        mask5 = (z_arr >= z5)
+        if np.any(mask5):
+            in_sep = mask5 & (z_arr < z6)
+            if np.any(in_sep):
+                theta[in_sep] = theta_z5 + k3 * (z_arr[in_sep] - z5)
+                x_ref[in_sep] = x_z5 - (1.0 / k3) * (np.log(np.cos(theta[in_sep])) - np.log(np.cos(theta_z5))) if abs(k3)>1e-6 else x_z5 + (z_arr[in_sep]-z5)*np.tan(theta_z5+(theta[in_sep]-theta_z5)/2)
+            
+            beyond = mask5 & (z_arr >= z6)
+            if np.any(beyond):
+                theta[beyond] = theta_z6
+                x_ref[beyond] = x_z6 + (z_arr[beyond] - z6) * np.tan(theta_z6)
+                
+        if is_scalar:
+            return x_ref[0], theta[0]
+        return x_ref, theta
+        
+    return get_reference_trajectory
+
 
 # ---------------------------------------------------------------------------
 # Scene builder
 # ---------------------------------------------------------------------------
 
-def _build_scene(view, canvas, r_pipe, raw_data, env_data):
+def _build_scene(view, canvas, fallback_r_pipe, raw_data, env_data):
     """
     Construct the static beamline geometry in the VisPy scene.
     Returns a dict of geometry metadata needed by the animation loop.
@@ -213,7 +217,16 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         quads_cfg = acol["quadrupoles"]
         dipoles_cfg = acol["dipoles"]
         septum_cfg = acol["septum"]
-        aperture_r = acol.get("aperture_radius", 0.10)
+        
+        # Pull realistic aperture config mapped from new lattice format
+        apertures_cfg = acol.get("apertures", {})
+        dipole_r = apertures_cfg.get("dipole_radius", 0.044)
+        quad_r   = apertures_cfg.get("quadrupole_radius", 0.095)
+        septum_r = apertures_cfg.get("septum_radius", 0.05)
+        horn_r   = apertures_cfg.get("horn_radius", 0.20)
+        pipe_r   = apertures_cfg.get("pipe_radius", 0.10)
+        
+        get_ref_traj = make_trajectory_func(acol)
         
         # 1. Target Core + Glow
         _tube5(view, t_z_start, t_z_end, t_radius,           _COL_TARGET_CORE)
@@ -221,7 +234,7 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         
         # 2. Horn: z in [0.0, 0.5]
         horn_length = 0.5
-        r1, r2 = 0.20, aperture_r
+        r1, r2 = 0.20, pipe_r
         pts_z = np.linspace(0.0, horn_length, 5)
         horn_pts = np.zeros((5, 3), dtype=np.float32)
         horn_pts[:, 2] = pts_z
@@ -229,21 +242,23 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         Tube(points=horn_pts, radius=horn_rads, closed=False,
              color=_COL_HORN, parent=view.scene)
              
-        prism_end_z = 0.5 + survey["BHZ0058"] + dipoles_cfg["BHZ0058"]["length"]
-        total_len = 48.4513
+        # Dynamic coordinate milestones
+        z1 = 0.5 + survey.get("BHZ0058", 8.0)
+        prism_end_z = z1 + dipoles_cfg.get("BHZ0058", {}).get("length", 1.9513)
+        total_len = 0.5 + survey.get("SEPTUM", 46.0) + septum_cfg.get("length", 1.9513)
         
-        # 1. Entrance pipe (straight, z in [0.5, 8.5])
-        ent_pts_z = np.linspace(0.5, 8.5, 50)
+        # 1. Entrance pipe (straight, z in [0.5, z1])
+        ent_pts_z = np.linspace(0.5, z1, 50)
         ent_pts = np.column_stack([np.zeros_like(ent_pts_z), np.zeros_like(ent_pts_z), ent_pts_z]).astype(np.float32)
-        t_ent = Tube(points=ent_pts, radius=aperture_r, closed=False,
+        t_ent = Tube(points=ent_pts, radius=pipe_r, closed=False,
                      color=_COL_PIPE, parent=view.scene)
         t_ent.set_gl_state('translucent', depth_mask=False)
         
         # 2. Exit pipe (curved, z in [prism_end_z, total_len])
         exit_pts_z = np.linspace(prism_end_z, total_len, 150)
-        exit_pts_x, _ = _get_reference_trajectory(exit_pts_z)
+        exit_pts_x, _ = get_ref_traj(exit_pts_z)
         exit_pts = np.column_stack([exit_pts_x, np.zeros_like(exit_pts_z), exit_pts_z]).astype(np.float32)
-        t_exit = Tube(points=exit_pts, radius=aperture_r, closed=False,
+        t_exit = Tube(points=exit_pts, radius=pipe_r, closed=False,
                       color=_COL_PIPE, parent=view.scene)
         t_exit.set_gl_state('translucent', depth_mask=False)
         
@@ -258,20 +273,20 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
             else:
                 col = _COL_FODO_F if g >= 0 else _COL_FODO_D
             
-            x0_ref, _ = _get_reference_trajectory(z_start)
-            x1_ref, _ = _get_reference_trajectory(z_end)
+            x0_ref, _ = get_ref_traj(z_start)
+            x1_ref, _ = get_ref_traj(z_end)
             
-            _tube5(view, z_start, z_end, aperture_r * 1.65, col, x0=x0_ref, x1=x1_ref)
-            _tube5(view, z_start, z_end, aperture_r * 0.95, (*col[:3], 0.15), x0=x0_ref, x1=x1_ref)
+            _tube5(view, z_start, z_end, quad_r * 1.65, col, x0=x0_ref, x1=x1_ref)
+            _tube5(view, z_start, z_end, quad_r * 0.95, (*col[:3], 0.15), x0=x0_ref, x1=x1_ref)
             
         # Dipoles
         for name, cfg in dipoles_cfg.items():
             s_start = survey[name]
             z_start = 0.5 + s_start
             z_end = z_start + cfg["length"]
-            cx_ref, _ = _get_reference_trajectory(z_start + cfg["length"] / 2.0)
+            cx_ref, _ = get_ref_traj(z_start + cfg["length"] / 2.0)
             _box_at(view,
-                    width=aperture_r * 4.0, height=aperture_r * 4.0, depth=cfg["length"],
+                    width=dipole_r * 4.0, height=dipole_r * 4.0, depth=cfg["length"],
                     cx=cx_ref, cy=0.0, cz=z_start + cfg["length"] / 2.0,
                     color=_COL_DIPOLE_FIELD, edge_color=(0.4, 0.0, 0.8, 0.5))
             
@@ -279,30 +294,30 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         s_start_sep = survey["SEPTUM"]
         z_start_sep = 0.5 + s_start_sep
         z_end_sep = z_start_sep + septum_cfg["length"]
-        cx_ref, _ = _get_reference_trajectory(z_start_sep + septum_cfg["length"] / 2.0)
+        cx_ref, _ = get_ref_traj(z_start_sep + septum_cfg["length"] / 2.0)
         _box_at(view,
-                width=aperture_r * 4.0, height=aperture_r * 4.0, depth=septum_cfg["length"],
+                width=septum_r * 4.0, height=septum_r * 4.0, depth=septum_cfg["length"],
                 cx=cx_ref, cy=0.0, cz=z_start_sep + septum_cfg["length"] / 2.0,
                 color=(1.0, 0.2, 0.2, 0.3), edge_color=(1.0, 0.0, 0.0, 0.8))
                 
         # Optical flow rings (wireframe) following bent trajectory
         theta_r = np.linspace(0, 2 * np.pi, 16, endpoint=False)
         ring_step = 1.0
-        r = aperture_r * 1.02
+        r = pipe_r * 1.02
         
         # Draw transversal rings
         pts_rings = []
         
-        # 1. Straight entrance pipe: 0.5 <= z < 8.5
-        for z_r in np.arange(0.5, 8.5, ring_step):
+        # 1. Straight entrance pipe: 0.5 <= z < z1
+        for z_r in np.arange(0.5, z1, ring_step):
             for k in range(len(theta_r)):
                 t1 = theta_r[k]; t2 = theta_r[(k + 1) % len(theta_r)]
                 pts_rings.append([r * np.cos(t1), r * np.sin(t1), z_r])
                 pts_rings.append([r * np.cos(t2), r * np.sin(t2), z_r])
                 
-        # 2. Racetrack encasing inside selector dipole: 8.5 <= z <= prism_end_z
-        for z_r in np.arange(8.5, prism_end_z + 0.05, 0.25):
-            x_ref_val, _ = _get_reference_trajectory(z_r)
+        # 2. Racetrack encasing inside selector dipole: z1 <= z <= prism_end_z
+        for z_r in np.arange(z1, prism_end_z + 0.05, 0.25):
+            x_ref_val, _ = get_ref_traj(z_r)
             cx_left = x_ref_val
             cx_right = -x_ref_val
             
@@ -328,7 +343,7 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
                 
         # 3. Curved exit pipe: prism_end_z < z <= total_len
         for z_r in np.arange(prism_end_z, total_len + ring_step, ring_step):
-            x_ref_val, _ = _get_reference_trajectory(z_r)
+            x_ref_val, _ = get_ref_traj(z_r)
             for k in range(len(theta_r)):
                 t1 = theta_r[k]; t2 = theta_r[(k + 1) % len(theta_r)]
                 pts_rings.append([x_ref_val + r * np.cos(t1), r * np.sin(t1), z_r])
@@ -341,10 +356,10 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         # 1. Leftmost line (phi = pi) - always active
         long_pts_left = []
         for z_r in np.arange(0.5, total_len + 0.1, 0.5):
-            if z_r <= 8.5:
+            if z_r <= z1:
                 long_pts_left.append([-r, 0.0, z_r])
             else:
-                x_ref_val, _ = _get_reference_trajectory(z_r)
+                x_ref_val, _ = get_ref_traj(z_r)
                 long_pts_left.append([x_ref_val - r, 0.0, z_r])
         Line(pos=np.array(long_pts_left, dtype=np.float32),
              connect='strip', color=_COL_PIPE_WIRE, parent=view.scene)
@@ -352,10 +367,10 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         # 2. Rightmost line (phi = 0) - ends at prism_end_z
         long_pts_right = []
         for z_r in np.arange(0.5, prism_end_z + 0.05, 0.2):
-            if z_r <= 8.5:
+            if z_r <= z1:
                 long_pts_right.append([r, 0.0, z_r])
             else:
-                x_ref_val, _ = _get_reference_trajectory(z_r)
+                x_ref_val, _ = get_ref_traj(z_r)
                 long_pts_right.append([-x_ref_val + r, 0.0, z_r])
         Line(pos=np.array(long_pts_right, dtype=np.float32),
              connect='strip', color=_COL_PIPE_WIRE, parent=view.scene)
@@ -364,18 +379,18 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         # Left side top (0.5 to total_len)
         long_pts_top_l = []
         for z_r in np.arange(0.5, total_len + 0.1, 0.5):
-            if z_r <= 8.5:
+            if z_r <= z1:
                 long_pts_top_l.append([0.0, r, z_r])
             else:
-                x_ref_val, _ = _get_reference_trajectory(z_r)
+                x_ref_val, _ = get_ref_traj(z_r)
                 long_pts_top_l.append([x_ref_val, r, z_r])
         Line(pos=np.array(long_pts_top_l, dtype=np.float32),
              connect='strip', color=_COL_PIPE_WIRE, parent=view.scene)
              
-        # Right side top (8.5 to prism_end_z)
+        # Right side top (z1 to prism_end_z)
         long_pts_top_r = []
-        for z_r in np.arange(8.5, prism_end_z + 0.05, 0.1):
-            x_ref_val, _ = _get_reference_trajectory(z_r)
+        for z_r in np.arange(z1, prism_end_z + 0.05, 0.1):
+            x_ref_val, _ = get_ref_traj(z_r)
             long_pts_top_r.append([-x_ref_val, r, z_r])
         Line(pos=np.array(long_pts_top_r, dtype=np.float32),
              connect='strip', color=_COL_PIPE_WIRE, parent=view.scene)
@@ -384,18 +399,18 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         # Left side bottom (0.5 to total_len)
         long_pts_bot_l = []
         for z_r in np.arange(0.5, total_len + 0.1, 0.5):
-            if z_r <= 8.5:
+            if z_r <= z1:
                 long_pts_bot_l.append([0.0, -r, z_r])
             else:
-                x_ref_val, _ = _get_reference_trajectory(z_r)
+                x_ref_val, _ = get_ref_traj(z_r)
                 long_pts_bot_l.append([x_ref_val, -r, z_r])
         Line(pos=np.array(long_pts_bot_l, dtype=np.float32),
              connect='strip', color=_COL_PIPE_WIRE, parent=view.scene)
              
-        # Right side bottom (8.5 to prism_end_z)
+        # Right side bottom (z1 to prism_end_z)
         long_pts_bot_r = []
-        for z_r in np.arange(8.5, prism_end_z + 0.05, 0.1):
-            x_ref_val, _ = _get_reference_trajectory(z_r)
+        for z_r in np.arange(z1, prism_end_z + 0.05, 0.1):
+            x_ref_val, _ = get_ref_traj(z_r)
             long_pts_bot_r.append([-x_ref_val, -r, z_r])
         Line(pos=np.array(long_pts_bot_r, dtype=np.float32),
              connect='strip', color=_COL_PIPE_WIRE, parent=view.scene)
@@ -409,12 +424,12 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         })
         return metadata
 
-    # ── Horn ────────────────────────────────────────────────────────────
+    # ── Legacy logic (Maintained for safety) ─────────────────────────────
     horn_length = 0.0
     if is_three_zone:
         # Horn always occupies the first 0.5 m of Zone 1
         horn_length = 0.5
-        r1, r2 = 0.20, r_pipe
+        r1, r2 = 0.20, fallback_r_pipe
         pts_z = np.linspace(0.0, horn_length, 5)
         horn_pts = np.zeros((5, 3), dtype=np.float32)
         horn_pts[:, 2] = pts_z
@@ -429,7 +444,7 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
             if el.get('type') == 'MagneticHorn':
                 L  = el.get('L', 0.50)
                 horn_length = L
-                r1, r2 = 0.20, r_pipe
+                r1, r2 = 0.20, fallback_r_pipe
                 pts_z = np.linspace(z_cursor, z_cursor + L, 5)
                 horn_pts = np.zeros((5, 3), dtype=np.float32)
                 horn_pts[:, 2] = pts_z
@@ -441,25 +456,21 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
     metadata = {"horn_length": horn_length}
 
     if is_three_zone:
-        # ── Zone 1: Separation Chamber ───────────────────────────────────
         chamber_L = dc.get("length", 10.0)
         chamber_W = dc.get("width",  3.0)
         chamber_H = dc.get("height", 3.0)
 
-        # Outer vacuum vessel (translucent box, drawn last for depth blending)
         sep_chamber = _box_at(view,
                               width=chamber_W, height=chamber_H, depth=chamber_L,
                               cx=0.0, cy=0.0, cz=chamber_L / 2.0,
                               color=_COL_SEP_CHAMBER, edge_color=_COL_SEP_EDGE)
 
-        # Dipole field indicator (faint purple slab inside the chamber)
         _box_at(view,
                 width=chamber_W * 0.95, height=chamber_H * 0.95,
                 depth=chamber_L - horn_length,
                 cx=0.0, cy=0.0, cz=horn_length + (chamber_L - horn_length) / 2.0,
                 color=_COL_DIPOLE_FIELD, edge_color=(0.4, 0.0, 0.8, 0.2))
 
-        # Beam dump (opaque block on-axis)
         dump_cfg    = dc.get("dump", {})
         dump_L      = dump_cfg.get("length",     2.0)
         dump_W      = dump_cfg.get("width",      1.0)
@@ -471,18 +482,15 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
                 cx=dump_x_off, cy=0.0, cz=dump_z_ctr,
                 color=_COL_DUMP, edge_color=_COL_DUMP_EDGE)
 
-        # Acceptance aperture ring (bright green, offset to left: -x)
         aper_r    = dc.get("acceptance_aperture_radius",  0.10)
         aper_x    = dc.get("acceptance_aperture_x_offset", -0.5)
         aper_z    = chamber_L
         _ring(view, cx=aper_x, cy=0.0, cz=aper_z,
               radius=aper_r, color=_COL_APERTURE)
 
-        # Second ring slightly upstream (visual depth cue)
         _ring(view, cx=aper_x, cy=0.0, cz=aper_z - 0.05,
               radius=aper_r * 1.3, color=(*_COL_APERTURE[:3], 0.35))
 
-        # Arrow indicating aperture entry channel
         arrow_pts = np.array([
             [0.0,  0.0, aper_z],
             [aper_x, 0.0, aper_z]
@@ -490,12 +498,10 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         Line(pos=arrow_pts, connect='strip',
              color=(0.0, 1.0, 0.5, 0.5), parent=view.scene)
 
-        # ── Zone 2: Matching quadrupoles ─────────────────────────────────
         match_r = ms.get("aperture_radius", 0.15)
         ms_start = ms.get("start_z", 10.0)
         ms_end   = ms.get("end_z",   25.0)
 
-        # Matching vacuum pipe (shifted to aper_x)
         _tube5(view, ms_start, ms_end, match_r, _COL_PIPE, x0=aper_x, x1=aper_x)
 
         for qd in ms.get("quadrupoles", []):
@@ -504,43 +510,35 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
             q_g  = qd.get("gradient", 0.0)
             col  = _COL_MATCH_F if q_g >= 0 else _COL_MATCH_D
             _tube5(view, q_z, q_z + q_L, match_r * 1.60, col, x0=aper_x, x1=aper_x)
-            # Slim inner bore highlight
             _tube5(view, q_z, q_z + q_L, match_r * 0.95,
                    (*col[:3], 0.15), x0=aper_x, x1=aper_x)
 
-        # ── Zone 3: FODO Lattice ─────────────────────────────────────────
         fodo_start = fl.get("start_z",    25.0)
         fodo_end   = fl.get("end_z",       50.0)
         cell_L     = fl.get("cell_length",  4.0)
         quad_L_f   = fl.get("quad_length",  0.5)
         drift_L_f  = fl.get("drift_length", 1.5)
 
-        # FODO vacuum pipe (shifted to aper_x)
-        _tube5(view, fodo_start, fodo_end, r_pipe, _COL_PIPE, x0=aper_x, x1=aper_x)
+        _tube5(view, fodo_start, fodo_end, fallback_r_pipe, _COL_PIPE, x0=aper_x, x1=aper_x)
 
         n_cells = int((fodo_end - fodo_start) / cell_L)
         for i in range(n_cells):
             cell_z = fodo_start + i * cell_L
 
-            # Focusing quad (QF)
             qf_z0 = cell_z
             qf_z1 = cell_z + quad_L_f
-            _tube5(view, qf_z0, qf_z1, r_pipe * 1.65, _COL_FODO_F, x0=aper_x, x1=aper_x)
+            _tube5(view, qf_z0, qf_z1, fallback_r_pipe * 1.65, _COL_FODO_F, x0=aper_x, x1=aper_x)
 
-            # Defocusing quad (QD)
             qd_z0 = cell_z + quad_L_f + drift_L_f
             qd_z1 = qd_z0 + quad_L_f
-            _tube5(view, qd_z0, qd_z1, r_pipe * 1.65, _COL_FODO_D, x0=aper_x, x1=aper_x)
+            _tube5(view, qd_z0, qd_z1, fallback_r_pipe * 1.65, _COL_FODO_D, x0=aper_x, x1=aper_x)
 
-        # Optical flow rings — two separate wireframes so each section uses
-        # the correct outer radius (matching aperture vs FODO pipe radius).
         theta_r   = np.linspace(0, 2 * np.pi, 16, endpoint=False)
         ring_step = 1.0
 
         def _make_ring_grid(z_start, z_end, outer_r):
-            """Build segment-connected ring + rail geometry for a pipe section."""
             pts = []
-            r = outer_r * 1.02  # sit just outside the pipe wall
+            r = outer_r * 1.02
             for z_r in np.arange(z_start, z_end + ring_step, ring_step):
                 for k in range(len(theta_r)):
                     t1 = theta_r[k]; t2 = theta_r[(k + 1) % len(theta_r)]
@@ -551,12 +549,10 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
                 pts.append([aper_x + r * np.cos(t_ang), r * np.sin(t_ang), z_end])
             return np.array(pts, dtype=np.float32)
 
-        # Matching section rings (wider aperture = match_r)
         Line(pos=_make_ring_grid(ms_start, ms_end, match_r),
              connect='segments', color=_COL_PIPE_WIRE, parent=view.scene)
 
-        # FODO section rings (tighter pipe = r_pipe)
-        Line(pos=_make_ring_grid(fodo_start, fodo_end, r_pipe),
+        Line(pos=_make_ring_grid(fodo_start, fodo_end, fallback_r_pipe),
              connect='segments', color=_COL_PIPE_WIRE, parent=view.scene)
 
         metadata.update({
@@ -567,11 +563,10 @@ def _build_scene(view, canvas, r_pipe, raw_data, env_data):
         })
 
     else:
-        # ── Legacy: straight pipe from horn to 1000 m ────────────────────
         pipe_start = horn_length
-        _tube5(view, pipe_start, 1000.0, r_pipe, _COL_PIPE)
+        _tube5(view, pipe_start, 1000.0, fallback_r_pipe, _COL_PIPE)
 
-        ring_r   = r_pipe * 1.02
+        ring_r   = fallback_r_pipe * 1.02
         ring_zs  = np.arange(pipe_start, 1000.0, 1.0)
         theta_r  = np.linspace(0, 2 * np.pi, 16, endpoint=False)
         grid_pts = []
@@ -634,6 +629,7 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W,
     base_rgb = np.zeros((N, 3), dtype=np.float32)
     pbar_mask = charges == -1
     prot_mask = charges == +1
+    total_pbar = int(np.sum(pbar_mask))
     base_rgb[pbar_mask] = _COL_ANTIPROTON
     base_rgb[prot_mask] = _COL_PROTON
 
@@ -651,8 +647,6 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W,
 
     # ── Build static scene geometry ───────────────────────────────────────
     geo = _build_scene(view, canvas, r_pipe, raw_data, env_data)
-    horn_length  = geo.get("horn_length", 0.0)
-    is_three_zone = geo.get("is_three_zone", False)
 
     # Particle markers (instantiated after scene geometry to render on top)
     markers = scene.visuals.Markers(parent=view.scene)
@@ -753,14 +747,16 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W,
                 view.camera.center = (0.0, 0.0, center_z)
 
                 current_N   = int(np.sum(~np.isnan(new_positions[:, 2])))
-                survival    = (current_N / N) * 100.0
                 n_pbar_live = int(np.sum(~np.isnan(new_positions[pbar_mask, 2])))
                 n_prot_live = int(np.sum(~np.isnan(new_positions[prot_mask, 2])))
+                
+                # Calculate p-bar specific survival rate safely
+                pbar_survival = (n_pbar_live / total_pbar * 100.0) if total_pbar > 0 else 0.0
 
                 hud_text.text = (
                     f"Distance: {center_z:.2f} m   |   "
-                    f"Alive: {current_N}/{N} ({survival:.1f}%)   |   "
-                    f"p̄: {n_pbar_live}   p: {n_prot_live}"
+                    f"p-bar Alive: {n_pbar_live}/{total_pbar} ({pbar_survival:.1f}%)   |   "
+                    f"p Alive: {n_prot_live}"
                 )
 
     timer = vispy.app.Timer('auto', connect=on_timer, start=True)

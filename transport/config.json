@@ -2,7 +2,7 @@
     "config": {
         "mode": "visual",
         "headless_time_ns": 170.0,
-        "calibration_mode": true,
+        "calibration_mode": false,
         "reference_p_gevc": 3.5752,
         "R_PIPE": 0.10,
         "dt_visual": 2e-12,
@@ -30,9 +30,12 @@
     },
     "acol": {
         "survey_coordinates": {
+            "TARGET": 0.0,
+            "HORN": 0.0,
             "QFO0050": 0.0,
             "QDE0055": 5.0,
             "BHZ0058": 8.0,
+            "BHZ0059": 8.0,
             "QFO0060": 10.0,
             "QDE0065": 15.0,
             "QFO0070": 20.0,
@@ -42,7 +45,10 @@
             "BHZ0088": 38.0,
             "QFO0090": 40.0,
             "QDS0095": 45.0,
-            "SEPTUM": 46.0
+            "QFS50": 46.0,
+            "SEPTUM": 47.0,
+            "INJECTION_KICKER": 47.5,
+            "INJECTION_PLANE": 47.9513
         },
         "quadrupoles": {
             "QFO0050": {
@@ -56,22 +62,22 @@
                 "type": "QDE"
             },
             "QFO0060": {
-                "gradient": 5.81,
+                "gradient": 8.81,
                 "length": 0.7,
                 "type": "QFO"
             },
             "QDE0065": {
-                "gradient": -6.08,
+                "gradient": -9.08,
                 "length": 0.7,
                 "type": "QDE"
             },
             "QFO0070": {
-                "gradient": 5.81,
+                "gradient": 8.81,
                 "length": 0.7,
                 "type": "QFO"
             },
             "QDE0075": {
-                "gradient": -6.08,
+                "gradient": -9.08,
                 "length": 0.7,
                 "type": "QDE"
             },
@@ -94,6 +100,11 @@
                 "gradient": -6.08,
                 "length": 0.7,
                 "type": "QDE"
+            },
+            "QFS50": {
+                "gradient": 7.02,
+                "length": 0.7,
+                "type": "QFO_W"
             }
         },
         "dipoles": {
@@ -111,6 +122,13 @@
         "septum": {
             "bend_angle_deg": -7.33,
             "length": 1.9513
+        },
+        "apertures": {
+            "dipole_radius": 0.044,
+            "quadrupole_radius": 0.095,
+            "septum_radius": 0.05,
+            "horn_radius": 0.20,
+            "pipe_radius": 0.10
         },
         "fodo": {
             "period_length": 6.9,

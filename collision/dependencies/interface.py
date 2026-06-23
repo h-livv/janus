@@ -1,6 +1,7 @@
 import cmd
 from pathlib import Path
 import subprocess
+import sys
 import json
 from datetime import datetime, timedelta, timezone
 import glob
@@ -22,8 +23,7 @@ MACRO_PATH = ENGINE_DIR / "macros" / "run.mac"
 HARDCODED_H5_VAL = PROJECT_ROOT / "temp" / "validation.hdf5"
 HARDCODED_H5_SIM = PROJECT_ROOT / "temp" / "simulation.hdf5"
 
-# The master directory where your packaged runs will be saved
-OUTPUT_DIR = PROJECT_ROOT / "outputs"
+OUTPUT_DIR = PROJECT_ROOT / "runs"
 
 
 # =========================================================
@@ -105,7 +105,7 @@ class Simulation:
             print(f"[-] Warning: {filepath} not found. Using default parameters.")
             return False # Default to non-interactive if no config exists
 
-        # Map Environment Settings safely
+        # Map Environment Settings
         if "environment" in config:
             env = config["environment"]
             self.environment.world_material = env.get("world_material", self.environment.world_material)
@@ -118,7 +118,7 @@ class Simulation:
             self.environment.target_length = env.get("target_length", self.environment.target_length)
             self.environment.target_position = env.get("target_position", self.environment.target_position)
 
-        # Map Beam Settings safely
+        # Map Beam Settings
         if "beam" in config:
             beam = config["beam"]
             self.beam.particle = beam.get("particle", self.beam.particle)
@@ -132,15 +132,15 @@ class Simulation:
             self.beam.energy_mean = beam.get("energy_mean", self.beam.energy_mean)
             self.beam.energy_sigma = beam.get("energy_sigma", self.beam.energy_sigma)
             
-        # Map Output Settings safely
+        # Map Output Settings
         if "output" in config:
             output_cfg = config["output"]
             self.output_filter = output_cfg.get("filter", self.output_filter)
-            self.drop_light_particles = output_cfg.get("drop_light_particles", self.drop_light_particles),
+            self.drop_light_particles = output_cfg.get("drop_light_particles", self.drop_light_particles)
             self.save_secondaries = output_cfg.get("save_secondaries", self.save_secondaries)
             self.record_mode = output_cfg.get("record_mode", self.record_mode)
             
-        # Map Run Settings safely
+        # Map Run Settings
         run_settings = config.get("run_settings", {})
         self.physics_list = run_settings.get("physics_list", self.physics_list)
         self.production_cut = run_settings.get("production_cut", self.production_cut)
@@ -148,7 +148,7 @@ class Simulation:
         self.seed = run_settings.get("seed", self.seed)
         self.threads = run_settings.get("threads", self.threads)
 
-        # Return the interactive flag so run.py knows how to launch
+        # Return the interactive flag
         return run_settings.get("interactive", False)
 
     # -----------------------------------------------------
@@ -192,7 +192,7 @@ class Simulation:
             f"/janus/output/setLightFilter 1" if self.drop_light_particles else f"/janus/output/setLightFilter 0",
         ])
         
-        # Dynamic Thread Injection
+        # Dynamic Thread Count
         if self.threads is not None:
             lines.append(f"/run/numberOfThreads {self.threads}")
             
@@ -201,7 +201,7 @@ class Simulation:
         # ---------------------------------------------
         # Production & Tracking Cuts
         # ---------------------------------------------
-        # Cuts MUST be applied AFTER initialize
+        # Cuts MUST be applied AFTER initialization
         if self.production_cut is not None:
             lines.append(f"/run/setCut {self.production_cut}")
             
@@ -233,7 +233,7 @@ class Simulation:
             lines.append(f"/gun/beam/energySigma {self.beam.energy_sigma}")
 
         # -------------------------------------------------
-        # Dynamic Visualization Injection
+        # Visualization
         # -------------------------------------------------
         if interactive:
             lines.extend([
@@ -271,7 +271,7 @@ class Simulation:
                 "/vis/modeling/trajectories/drawByParticleID-0/set pi- yellow",
                 "/vis/modeling/trajectories/drawByParticleID-0/set pi0 white",
                 
-                # LIMIT TO 100 EVENTS (Crash Prevention)
+                # LIMIT TO 1000 EVENTS (Crash Prevention)
                 "/vis/scene/endOfEventAction accumulate 1000",
 
                 # --- Decorations ---
@@ -413,7 +413,7 @@ class Simulation:
     
     def run(self, interactive=False):
         
-        # --- Clean orphaned temp files from previous crashed runs ---
+        # --- Clean temp files from previous runs ---
         temp_dir = PROJECT_ROOT / "temp"
         if temp_dir.exists():
             for h5_file in temp_dir.glob("*.hdf5"):
@@ -487,8 +487,8 @@ class Simulation:
         # Data Packaging & Archiving
         # -------------------------------------------------
         
-        subprocess.run(["python3", str(BASE_DIR / "dependencies" / "merge.py"), str(PROJECT_ROOT / "temp" / "validation"), str(HARDCODED_H5_VAL)])
-        subprocess.run(["python3", str(BASE_DIR / "dependencies" / "merge.py"), str(PROJECT_ROOT / "temp" / "simulation"), str(HARDCODED_H5_SIM)])
+        subprocess.run([sys.executable, str(BASE_DIR / "dependencies" / "merge.py"), str(PROJECT_ROOT / "temp" / "validation"), str(HARDCODED_H5_VAL)])
+        subprocess.run([sys.executable, str(BASE_DIR / "dependencies" / "merge.py"), str(PROJECT_ROOT / "temp" / "simulation"), str(HARDCODED_H5_SIM)])
         
         if HARDCODED_H5_VAL.exists() and HARDCODED_H5_SIM.exists():
             # 1. Generate unique run name and create the directory
@@ -511,7 +511,7 @@ class Simulation:
             from . import analyze
             analyze.generate_summary(new_val_path, run_folder)
             
-            print(f"[+] Run packaged successfully in: /outputs/{run_name}/\n")
+            print(f"[+] Run packaged successfully in: /runs/{run_name}/\n")
         else:
             print("[-] Warning: Expected output HDF5 files not found. Data packaging skipped.\n")
 
@@ -538,7 +538,7 @@ class Simulation:
             print(result.stderr)
             
 # =========================================================
-# Data Ingestion Abstractions
+# Data Export as numpy arrays
 # =========================================================
 
 def get_validation_data(filepath):
@@ -558,5 +558,5 @@ def get_validation_data(filepath):
     return data
 
 def get_simulation_data(filepath):
-    return get_validation_data(filepath) # Same traversal logic works for both Ntuples
+    return get_validation_data(filepath)
             

@@ -16,6 +16,9 @@ def main():
     parser = argparse.ArgumentParser(description="Janus Visualization Pipeline")
     default_config = os.path.join(os.path.dirname(__file__), "config.json")
     parser.add_argument('--config', type=str, default=default_config, help='Path to JSON lattice configuration')
+    parser.add_argument('--filter', type=str, default=None, help='Filter function name from runs.filters')
+    parser.add_argument('--num-pbar', type=int, default=None, help='Number of antiprotons to select')
+    parser.add_argument('--num-proton', type=int, default=None, help='Number of protons to select')
     args = parser.parse_args()
 
     print(f"[Main] Initializing Janus Pipeline with config: {args.config}")
@@ -38,32 +41,50 @@ def main():
     if use_npz:
         try:
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            npz_path = os.path.join(project_root, "runs", "simulation_raw.npz")
+            npz_path = os.path.join(project_root, "runs", "datasets", "simulation_raw.npz")
+            if not os.path.exists(npz_path):
+                npz_path = os.path.join(project_root, "runs", "simulation_raw.npz")
             print(f"[Main] Loading seeds from NPZ: {npz_path}")
             
             data = np.load(npz_path)
-            pdg_code = data['pdg_code']
+            
+            if args.filter:
+                from runs.filters.utilities import apply_mask
+                import runs.filters as rf
+                filter_func = getattr(rf, args.filter, None)
+                if filter_func is None:
+                    raise ValueError(f"Filter function '{args.filter}' not found in runs.filters")
+                print(f"[Main] Applying filter: {args.filter}")
+                mask = filter_func(data)
+                filtered_data = apply_mask(data, mask)
+            else:
+                filtered_data = data
+                
+            pdg_code = filtered_data['pdg_code']
             
             pbar_indices = np.where(pdg_code == -2212)[0]
             proton_indices = np.where(pdg_code == 2212)[0]
             
+            n_pbar_target = args.num_pbar if args.num_pbar is not None else 50
+            n_proton_target = args.num_proton if args.num_proton is not None else 100
+            
             rng = np.random.RandomState(42)
-            selected_pbar = rng.choice(pbar_indices, size=min(50, len(pbar_indices)), replace=False)
-            selected_proton = rng.choice(proton_indices, size=min(100, len(proton_indices)), replace=False)
+            selected_pbar = rng.choice(pbar_indices, size=min(n_pbar_target, len(pbar_indices)), replace=False)
+            selected_proton = rng.choice(proton_indices, size=min(n_proton_target, len(proton_indices)), replace=False)
             
             selected_idx = np.concatenate([selected_pbar, selected_proton])
             rng.shuffle(selected_idx)
             
             # Extract coordinates (convert from mm to meters)
-            x_m = data['start_x'][selected_idx] * 1e-3
-            y_m = data['start_y'][selected_idx] * 1e-3
-            z_m = data['start_z'][selected_idx] * 1e-3
+            x_m = filtered_data['start_x'][selected_idx] * 1e-3
+            y_m = filtered_data['start_y'][selected_idx] * 1e-3
+            z_m = filtered_data['start_z'][selected_idx] * 1e-3
             R = np.column_stack((x_m, y_m, z_m)).astype(np.float32)
             
             # Extract momentum (MeV/c) and compute velocity/gamma
-            px = data['start_px'][selected_idx]
-            py = data['start_py'][selected_idx]
-            pz = data['start_pz'][selected_idx]
+            px = filtered_data['start_px'][selected_idx]
+            py = filtered_data['start_py'][selected_idx]
+            pz = filtered_data['start_pz'][selected_idx]
             P_mevc = np.column_stack((px, py, pz))
             
             M_PBAR = 938.2720813
@@ -116,14 +137,14 @@ def main():
               f"({n_antiproton} antiprotons, {n_proton} protons).")
 
     # Apply Calibration Mode (Forces transverse velocities to zero)
+    # Apply Calibration Mode (Forces transverse velocities to zero)
     if config_dict.get("config", {}).get("calibration_mode", False) or config_dict.get("calibration_mode", False):
+        # Preserve total velocity/momentum, just make it perfectly straight
+        v_mag = np.sqrt(np.sum(V**2, axis=1))
         V[:, 0] = 0.0
         V[:, 1] = 0.0
-        V[:,2]=284802835.0
-        c_light  = 299792458.0
-        v_mag_sq = np.sum(V**2, axis=1)
-        v_mag_sq = np.clip(v_mag_sq, 0.0, (0.999 * c_light)**2)
-        gamma    = (1.0 / np.sqrt(1.0 - v_mag_sq / c_light**2)).astype(np.float32)
+        V[:, 2] = v_mag
+        # Gamma remains untouched because the velocity magnitude is identical
         print("[Main] CALIBRATION MODE ENABLED: Transverse velocities forced to 0.0.")
 
     # 3. Execution
@@ -135,6 +156,10 @@ def main():
         print("[Main] Mode: HEADLESS DIAGNOSTIC RUN")
         headless_time_ns = config_dict.get("headless_time_ns", 150.0)
         print(f"[Main] Starting physics simulation for {headless_time_ns} ns…")
+
+        R_init = R.copy()
+        V_init = V.copy()
+        gamma_init = gamma.copy()
 
         R_final, V_final, alive_mask, death_causes = run_physics_loop(
             R, V, gamma, None, None, None, None, config_dict, machine,
@@ -220,6 +245,7 @@ def main():
                         elif abs(s_start - 35.0) < 0.1: name = "QDE0085"
                         elif abs(s_start - 40.0) < 0.1: name = "QFO0090"
                         elif abs(s_start - 45.0) < 0.1: name = "QDS0095"
+                        elif abs(s_start - 46.0) < 0.1: name = "QFS50"
                         else: continue
                         major_elements.append((name, z_end))
                     elif el_type == "SelectorDipole":
@@ -264,24 +290,15 @@ def main():
 
         print(f"\n[Main] Headless run complete. Report saved to: {report_path}")
 
-        # Diagnostics
-        from transport.dependencies.diagnostics import generate_all_diagnostics
+        # Upgraded Diagnostics
+        from transport.dependencies.diagnostics_tracker import generate_beam_diagnostics
+        generate_beam_diagnostics(R_init, V_init, gamma_init, charges, machine, config_dict, unique_dir)
 
-        c_light  = 299792458.0
-        v_mag_sq = np.sum(V_final**2, axis=1)
-        v_mag_sq = np.clip(v_mag_sq, 0.0, (0.999 * c_light)**2)
-        gamma_f  = 1.0 / np.sqrt(1.0 - v_mag_sq / c_light**2)
-
-        M_PBAR  = 938.2720813
-        P_final = (gamma_f[:, np.newaxis] * M_PBAR * V_final) / c_light
-
-        data_6D    = np.column_stack((R_final, P_final))
-        pbar_mask  = (charges == -1)
-        pbar_data  = data_6D[pbar_mask]
-        pbar_dead  = data_6D[(~alive_mask) & pbar_mask]
-        r_pipe     = config_dict.get("R_PIPE", 0.10)
-
-        generate_all_diagnostics(pbar_data, pbar_dead, unique_dir, pipe_radius=r_pipe)
+        # ============================================================
+        # REFERENCE PARTICLE DIAGNOSTIC
+        # ============================================================
+        from transport.dependencies.reference_diagnostic import run_reference_particle_diagnostic
+        run_reference_particle_diagnostic(machine, config_dict, unique_dir)
 
     else:
         print("[Main] Mode: VISUAL GPU RENDERING")
