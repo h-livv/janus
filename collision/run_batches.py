@@ -4,7 +4,7 @@ from dependencies.interface import Simulation
 
 def run_production_batches():
     # Define batches
-    suite = [{"name": f"Batch_{i}"} for i in range(55, 121)]
+    suite = [{"name": f"Batch_{i}"} for i in range(1, 61)]
 
     events_per_batch = 100000 # 100k particles per batch
 

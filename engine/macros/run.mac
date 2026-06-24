@@ -13,7 +13,7 @@
 /janus/det/setTargetMaterial G4_Ir
 /janus/det/setTargetWidth 3.0 mm
 /janus/det/setTargetLength 55 mm
-/janus/det/setTargetPosition 0 0 +25.0 cm
+/janus/det/setTargetPosition 0 0 -27.5 cm
 /janus/output/setFilter 0
 /janus/output/setLightFilter 0
 /run/numberOfThreads 12
