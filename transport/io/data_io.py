@@ -1,6 +1,11 @@
 import os
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
-import h5py
+
+# Override print to suppress [DataIO] prints by default unless verbose mode is set
+if os.environ.get("DATAIO_VERBOSE", "0") != "1":
+    def print(*args, **kwargs):
+        pass
+import uproot
 import hashlib
 import json
 import numpy as np
@@ -24,7 +29,7 @@ _CACHE_FILENAME = f"merged_seeds_cache_{_CACHE_VERSION}.npz"
 _MANIFEST_FILENAME = f"merged_seeds_manifest_{_CACHE_VERSION}.json"
 
 
-def get_run_files(outputs_dir_name="runs", target_filename="simulation.hdf5"):
+def get_run_files(outputs_dir_name="runs", target_filename="simulation.root"):
     base_dir     = Path(__file__).resolve().parent.parent.parent
     outputs_path = base_dir / outputs_dir_name
 
@@ -57,7 +62,7 @@ def _normalize_path(p) -> str:
 
 
 def _file_fingerprint(path: Path) -> str:
-    """Return a stable fingerprint for a single HDF5 file using its mtime + size."""
+    """Return a stable fingerprint for a single ROOT file using its mtime + size."""
     stat = path.stat()
     return f"{stat.st_size}:{stat.st_mtime_ns}"
 
@@ -77,17 +82,17 @@ def _fingerprints_match(fp1: str, fp2: str) -> bool:
         return False
 
 
-def _build_manifest(hdf5_paths):
+def _build_manifest(root_paths):
     """
     Build a dict that maps each normalized filepath string to its fingerprint.
     This is the ground truth that the cache was built from.
     """
-    return {_normalize_path(p): _file_fingerprint(p) for p in hdf5_paths}
+    return {_normalize_path(p): _file_fingerprint(p) for p in root_paths}
 
 
-def _manifest_is_stale(manifest: dict, hdf5_paths) -> tuple[bool, list]:
+def _manifest_is_stale(manifest: dict, root_paths) -> tuple[bool, list]:
     """
-    Compare a stored manifest against the current set of HDF5 files.
+    Compare a stored manifest against the current set of ROOT files.
     Returns (is_stale, new_files) where new_files are paths not yet in the cache.
 
     is_stale=True means the cache must be fully rebuilt (a file was modified or removed).
@@ -96,7 +101,7 @@ def _manifest_is_stale(manifest: dict, hdf5_paths) -> tuple[bool, list]:
     """
     # Normalize keys in stored manifest to support legacy absolute paths
     normalized_manifest = {_normalize_path(k): v for k, v in manifest.items()}
-    current_fps = {_normalize_path(p): _file_fingerprint(p) for p in hdf5_paths}
+    current_fps = {_normalize_path(p): _file_fingerprint(p) for p in root_paths}
 
     # Check for modifications or deletions of files that were previously cached
     for path_str, cached_fp in normalized_manifest.items():
@@ -108,42 +113,42 @@ def _manifest_is_stale(manifest: dict, hdf5_paths) -> tuple[bool, list]:
             return True, []
 
     # Identify genuinely new files not present in the manifest at all
-    new_files = [p for p in hdf5_paths if _normalize_path(p) not in normalized_manifest]
+    new_files = [p for p in root_paths if _normalize_path(p) not in normalized_manifest]
     return False, new_files
 
 
-def _parse_single_hdf5(hdf5_filepath: Path):
+def _parse_single_root(root_filepath: Path):
     """
-    Parse one HDF5 file.  Returns (positions, velocities, gammas, charges)
+    Parse one ROOT file.  Returns (positions, velocities, gammas, charges)
     as float32/int8 arrays, or None if the file has no usable data.
     """
     c_light = 299792458.0
     p_min, p_max = 3480.0, 3680.0  # ±100 MeV/c around 3580 MeV/c nominal
 
-    with h5py.File(hdf5_filepath, 'r') as f:
-        if 'default_ntuples' not in f or 'Seeds' not in f['default_ntuples']:
+    with uproot.open(root_filepath) as f:
+        if 'Seeds' not in f:
             return None
 
-        group     = f['default_ntuples']['Seeds']
-        pdg_array = group['pdg_code']['pages'][()]
+        group     = f['Seeds']
+        pdg_array = group['pdg_code'].array(library="np")
 
         is_antiproton = (pdg_array == _PDG_ANTIPROTON)
         is_proton     = (pdg_array == _PDG_PROTON)
         charged_mask  = is_antiproton | is_proton
 
         if not np.any(charged_mask):
-            print(f"[DataIO]   Skipping {hdf5_filepath.name}: no antiprotons or protons.")
+            print(f"[DataIO]   Skipping {root_filepath.name}: no antiprotons or protons.")
             return None
 
         pdg_charged = pdg_array[charged_mask]
 
-        x_m  = group['start_x']['pages'][()][charged_mask] * 1e-3
-        y_m  = group['start_y']['pages'][()][charged_mask] * 1e-3
-        z_m  = group['start_z']['pages'][()][charged_mask] * 1e-3
+        x_m  = group['start_x'].array(library="np")[charged_mask] * 1e-3
+        y_m  = group['start_y'].array(library="np")[charged_mask] * 1e-3
+        z_m  = group['start_z'].array(library="np")[charged_mask] * 1e-3
 
-        px_mevc = group['start_px']['pages'][()][charged_mask]
-        py_mevc = group['start_py']['pages'][()][charged_mask]
-        pz_mevc = group['start_pz']['pages'][()][charged_mask]
+        px_mevc = group['start_px'].array(library="np")[charged_mask]
+        py_mevc = group['start_py'].array(library="np")[charged_mask]
+        pz_mevc = group['start_pz'].array(library="np")[charged_mask]
 
     positions_raw = np.column_stack((x_m, y_m, z_m)).astype(np.float32)
     P_mevc        = np.column_stack((px_mevc, py_mevc, pz_mevc))
@@ -163,7 +168,7 @@ def _parse_single_hdf5(hdf5_filepath: Path):
 
     n_pbar = int(np.sum(pdg_f == _PDG_ANTIPROTON))
     n_prot = int(np.sum(pdg_f == _PDG_PROTON))
-    print(f"[DataIO]   {hdf5_filepath.name}: "
+    print(f"[DataIO]   {root_filepath.name}: "
           f"{n_pbar} antiprotons + {n_prot} protons (after momentum cut)")
 
     return positions_f, velocities, gammas, charges
@@ -173,9 +178,9 @@ def _parse_single_hdf5(hdf5_filepath: Path):
 # Public API
 # ---------------------------------------------------------------------------
 
-def extract_cern_ad_seeds(hdf5_filepaths=None):
+def extract_cern_ad_seeds(root_filepaths=None):
     """
-    Parse one or more Geant4 HDF5 output files and return:
+    Parse one or more Geant4 ROOT output files and return:
       positions  : np.float32 (N, 3)  — [m]
       velocities : np.float32 (N, 3)  — [m/s]
       gammas     : np.float32 (N,)
@@ -185,31 +190,31 @@ def extract_cern_ad_seeds(hdf5_filepaths=None):
     ----------------
     A fixed-name .npz cache and a companion JSON manifest are stored in the
     runs/ directory.  The manifest records {filepath: (size, mtime_ns)} for
-    every HDF5 file that contributed to the cache.
+    every ROOT file that contributed to the cache.
 
     On each call:
-      1. Stat all HDF5 files (fast — no file reads).
+      1. Stat all ROOT files (fast — no file reads).
       2. If cache + manifest exist and every previously seen file is unmodified:
            a. If there are NEW files (batches added since last run):
               → Parse only the new files, concatenate with cached data, save.
            b. Otherwise:
-              → Return the cache directly. Zero HDF5 I/O.
+               → Return the cache directly. Zero ROOT I/O.
       3. If any previously cached file was modified or deleted:
            → Full rebuild from all files.
 
     This means adding a new Geant4 batch only ever parses that one new file,
     not the entire history.
     """
-    if hdf5_filepaths is None:
-        hdf5_filepaths = get_run_files()
-    elif not isinstance(hdf5_filepaths, list):
-        hdf5_filepaths = [hdf5_filepaths]
+    if root_filepaths is None:
+        root_filepaths = get_run_files()
+    elif not isinstance(root_filepaths, list):
+        root_filepaths = [root_filepaths]
 
-    if not hdf5_filepaths:
+    if not root_filepaths:
         return np.array([]), np.array([]), np.array([]), np.array([], dtype=np.int8)
 
-    # Cache lives alongside the HDF5 runs in the parent runs/ directory
-    cache_dir     = hdf5_filepaths[0].parent.parent
+    # Cache lives inside the unique run directory
+    cache_dir     = root_filepaths[0].parent
     cache_path    = cache_dir / _CACHE_FILENAME
     manifest_path = cache_dir / _MANIFEST_FILENAME
 
@@ -226,13 +231,13 @@ def extract_cern_ad_seeds(hdf5_filepaths=None):
     cache_exists = cache_path.exists() and bool(stored_manifest)
 
     is_stale = True
-    new_files = hdf5_filepaths
+    new_files = root_filepaths
     if cache_exists:
-        is_stale, new_files = _manifest_is_stale(stored_manifest, hdf5_filepaths)
+        is_stale, new_files = _manifest_is_stale(stored_manifest, root_filepaths)
 
     if cache_exists and not is_stale:
         if not new_files:
-            print(f"[DataIO] Cache hit — loading {cache_path.name} (zero HDF5 I/O)")
+            print(f"[DataIO] Cache hit — loading {cache_path.name} (zero ROOT I/O)")
             with np.load(cache_path) as data:
                 return (data['positions'], data['velocities'],
                         data['gammas'],    data['charges'])
@@ -250,7 +255,7 @@ def extract_cern_ad_seeds(hdf5_filepaths=None):
 
             new_pos, new_vel, new_gam, new_chg = [], [], [], []
             for fp in new_files:
-                result = _parse_single_hdf5(fp)
+                result = _parse_single_root(fp)
                 if result is not None:
                     new_pos.append(result[0]);  new_vel.append(result[1])
                     new_gam.append(result[2]);  new_chg.append(result[3])
@@ -265,7 +270,7 @@ def extract_cern_ad_seeds(hdf5_filepaths=None):
                     cached_pos, cached_vel, cached_gam, cached_chg)
 
             # Save updated cache + manifest
-            new_manifest = _build_manifest(hdf5_filepaths)
+            new_manifest = _build_manifest(root_filepaths)
             _save_cache(cache_path, manifest_path, new_manifest,
                         final_pos, final_vel, final_gam, final_chg)
             return final_pos, final_vel, final_gam, final_chg
@@ -273,11 +278,11 @@ def extract_cern_ad_seeds(hdf5_filepaths=None):
     # ── FULL REBUILD PATH ─────────────────────────────────────────────────
     reason = "no cache found" if not cache_exists else "cache is stale"
     print(f"[DataIO] Full rebuild ({reason}) — "
-          f"parsing {len(hdf5_filepaths)} HDF5 file(s)…")
+          f"parsing {len(root_filepaths)} ROOT file(s)…")
 
     all_pos, all_vel, all_gam, all_chg = [], [], [], []
-    for fp in hdf5_filepaths:
-        result = _parse_single_hdf5(fp)
+    for fp in root_filepaths:
+        result = _parse_single_root(fp)
         if result is not None:
             all_pos.append(result[0]);  all_vel.append(result[1])
             all_gam.append(result[2]);  all_chg.append(result[3])
@@ -291,7 +296,7 @@ def extract_cern_ad_seeds(hdf5_filepaths=None):
     final_gam = np.concatenate(all_gam,  axis=0)
     final_chg = np.concatenate(all_chg,  axis=0)
 
-    new_manifest = _build_manifest(hdf5_filepaths)
+    new_manifest = _build_manifest(root_filepaths)
     _save_cache(cache_path, manifest_path, new_manifest,
                 final_pos, final_vel, final_gam, final_chg)
 
@@ -315,7 +320,7 @@ def _save_cache(cache_path, manifest_path, manifest,
           f"({n_total} particles: {n_pbar} pbar + {n_prot} p)")
 
 
-def get_latest_run_file(outputs_dir_name="runs", target_filename="simulation.hdf5"):
+def get_latest_run_file(outputs_dir_name="runs", target_filename="simulation.root"):
     target_files = get_run_files(outputs_dir_name, target_filename)
     if not target_files:
         raise FileNotFoundError(f"No {target_filename} found in {outputs_dir_name}")

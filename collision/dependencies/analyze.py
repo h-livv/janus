@@ -1,4 +1,4 @@
-import h5py
+import uproot
 import numpy as np
 from pathlib import Path
 from collections import Counter
@@ -11,33 +11,24 @@ def get_particle_name(pdg):
     except Exception:
         return f"Unknown ({pdg})"
 
-def generate_summary(val_h5_path, output_dir):
-    val_h5_path = Path(val_h5_path)
+def generate_summary(val_root_path, output_dir):
+    val_root_path = Path(val_root_path)
     output_dir = Path(output_dir)
     
     try:
-        with h5py.File(val_h5_path, 'r') as f:
-            def find_dataset(name, node):
-                if isinstance(node, h5py.Dataset) and (name in node.name):
-                    return node
-                elif isinstance(node, h5py.Group):
-                    for key in node:
-                        res = find_dataset(name, node[key])
-                        if res is not None:
-                            return res
-                return None
-            
-            pdg_ds = find_dataset("outgoing_pdg/pages", f)
-            if pdg_ds is None:
-                # Fallback to older Geant4 HDF5 format
-                pdg_ds = find_dataset("outgoing_pdg", f)
-                
-            if pdg_ds is None:
+        with uproot.open(val_root_path) as f:
+            if "Validation" not in f:
                 with open(output_dir / "particle_summary.txt", "w") as out:
-                    out.write("Particle Generation Summary:\nError: outgoing_pdg dataset not found.\n")
+                    out.write("Particle Generation Summary:\nError: Validation tree not found.\n")
+                return
+            
+            tree = f["Validation"]
+            if "outgoing_pdg" not in tree:
+                with open(output_dir / "particle_summary.txt", "w") as out:
+                    out.write("Particle Generation Summary:\nError: outgoing_pdg branch not found.\n")
                 return
                 
-            pdg_data = pdg_ds[:]
+            pdg_data = tree["outgoing_pdg"].array(library="ak")
             
         counts = Counter()
         for val in pdg_data:

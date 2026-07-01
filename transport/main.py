@@ -1,357 +1,219 @@
-import os
 import sys
-import json
 import os
-os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import argparse
 import numpy as np
 import multiprocessing as mp
 from multiprocessing.shared_memory import SharedMemory
 
-from transport.dependencies.lattice import Lattice
-from transport.dependencies.data_io import extract_cern_ad_seeds
+# Ensure start method is spawn for VisPy/PyQt5 compatibility
+if __name__ == "__main__":
+    try:
+        mp.set_start_method('spawn', force=True)
+    except RuntimeError:
+        pass
+
+# ── Settings ───────────────────────────────────────────────────────────────
+VISUALIZATION_ENABLED = True  # Toggle to True to launch 3D OpenGL Viewport
+ELEMENT_TYPE = "dipole"          # Options: "drift", "dipole", "all"
+USE_MOCK_DATA = True         # Toggle to True to use tame mock coordinates/velocities
+# ───────────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Janus Visualization Pipeline")
-    default_config = os.path.join(os.path.dirname(__file__), "config.json")
-    parser.add_argument('--config', type=str, default=default_config, help='Path to JSON lattice configuration')
-    parser.add_argument('--filter', type=str, default=None, help='Filter function name from runs.filters')
-    parser.add_argument('--num-pbar', type=int, default=None, help='Number of antiprotons to select')
-    parser.add_argument('--num-proton', type=int, default=None, help='Number of protons to select')
-    args = parser.parse_args()
+    # Inject project root to sys.path
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
-    print(f"[Main] Initializing Janus Pipeline with config: {args.config}")
+    if not VISUALIZATION_ENABLED:
+        print("[Main] Visualization disabled. Carrying out validation tests normally...")
+        from transport.validation.validator import Validator
+        from transport.validation.cases.drift import DriftValidation
+        from transport.validation.cases.dipole import DipoleValidation
 
-    # 1. Load Configuration & Validate
-    try:
-        # Load raw JSON to preserve full structural context for the visual renderer
-        with open(args.config, 'r') as f:
-            raw_data = json.load(f)
+        cases = []
+        if ELEMENT_TYPE.lower() in ["drift", "all"]:
+            cases.append(DriftValidation())
+        if ELEMENT_TYPE.lower() in ["dipole", "all"]:
+            cases.append(DipoleValidation())
 
-        machine, config_dict = Lattice.load_from_json(args.config)
-    except Exception as e:
-        print(f"[Main] Critical Error loading configuration: {e}")
-        return
-
-    # 2. Setup Seed Data + Charges
-    beam_dist = config_dict.get("beam_distribution", {})
-    use_npz   = beam_dist.get("use_npz", False) or beam_dist.get("use_hdf5", False)
-
-    if use_npz:
-        try:
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            npz_path = os.path.join(project_root, "runs", "datasets", "simulation_raw.npz")
-            if not os.path.exists(npz_path):
-                npz_path = os.path.join(project_root, "runs", "simulation_raw.npz")
-            print(f"[Main] Loading seeds from NPZ: {npz_path}")
+        if USE_MOCK_DATA:
+            print("[Main] Overriding case parameters with tame mock data...")
+            def make_mock_initial_particles(case_instance):
+                def mock_initial_particles():
+                    R_init = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
+                    V_init = np.array([[0.0, 0.0, 100.0]], dtype=np.float64)
+                    gamma_init = np.array([1.0], dtype=np.float64)
+                    charges = np.array([-1], dtype=np.int8)
+                    
+                    # Set essential properties for lattice construction and analytical validation
+                    case_instance.z_start = 0.0
+                    case_instance.charge = -1
+                    case_instance.v_mag = 100.0
+                    case_instance.gamma = 1.0
+                    case_instance.B_rho = (1.0 * 1.67262192369e-27 * 100.0) / 1.602176634e-19
+                    case_instance.theta_entry = 0.0
+                    return R_init, V_init, gamma_init, charges
+                return mock_initial_particles
             
-            data = np.load(npz_path)
-            
-            if args.filter:
-                from runs.filters.utilities import apply_mask
-                import runs.filters as rf
-                filter_func = getattr(rf, args.filter, None)
-                if filter_func is None:
-                    raise ValueError(f"Filter function '{args.filter}' not found in runs.filters")
-                print(f"[Main] Applying filter: {args.filter}")
-                mask = filter_func(data)
-                filtered_data = apply_mask(data, mask)
-            else:
-                filtered_data = data
-                
-            pdg_code = filtered_data['pdg_code']
-            
-            pbar_indices = np.where(pdg_code == -2212)[0]
-            proton_indices = np.where(pdg_code == 2212)[0]
-            
-            n_pbar_target = args.num_pbar if args.num_pbar is not None else 50
-            n_proton_target = args.num_proton if args.num_proton is not None else 100
-            
-            rng = np.random.RandomState(42)
-            selected_pbar = rng.choice(pbar_indices, size=min(n_pbar_target, len(pbar_indices)), replace=False)
-            selected_proton = rng.choice(proton_indices, size=min(n_proton_target, len(proton_indices)), replace=False)
-            
-            selected_idx = np.concatenate([selected_pbar, selected_proton])
-            rng.shuffle(selected_idx)
-            
-            # Extract coordinates (convert from mm to meters)
-            x_m = filtered_data['start_x'][selected_idx] * 1e-3
-            y_m = filtered_data['start_y'][selected_idx] * 1e-3
-            z_m = filtered_data['start_z'][selected_idx] * 1e-3
-            R = np.column_stack((x_m, y_m, z_m)).astype(np.float32)
-            
-            # Extract momentum (MeV/c) and compute velocity/gamma
-            px = filtered_data['start_px'][selected_idx]
-            py = filtered_data['start_py'][selected_idx]
-            pz = filtered_data['start_pz'][selected_idx]
-            P_mevc = np.column_stack((px, py, pz))
-            
-            M_PBAR = 938.2720813
-            c_light = 299792458.0
-            p_sq = np.sum(P_mevc**2, axis=1)
-            E_total = np.sqrt(p_sq + M_PBAR**2)
-            gamma = (E_total / M_PBAR).astype(np.float32)
-            V = (P_mevc * (c_light / E_total[:, np.newaxis])).astype(np.float32)
-            
-            charges = np.where(pdg_code[selected_idx] == -2212, -1, 1).astype(np.int8)
-            
-            n_pbar = int(np.sum(charges == -1))
-            n_prot = int(np.sum(charges == +1))
-            print(f"[Main] Loaded {n_pbar} antiprotons and {n_prot} protons from NPZ.")
-            geant4_env = {}
-        except Exception as e:
-            print(f"[Main] Critical Error: 'use_npz' is True but could not load seeds ({e}).")
-            return
-    else:
-        geant4_env = {}
-        mock = beam_dist.get("mock", {})
-        N    = mock.get("N_particles", 50)
+            for case in cases:
+                case.initial_particles = make_mock_initial_particles(case)
+                case.dt = 1e-3
+                case.max_steps = 150
+                case.max_steps_conv = 80
 
-        # Charge ratio: antiprotons and protons only — no neutrals
-        charge_cfg   = mock.get("charge_ratio", {"antiproton": 0.6, "proton": 0.4})
-        n_antiproton = max(1, int(round(N * charge_cfg.get("antiproton", 0.6))))
-        n_proton     = N - n_antiproton
+        if not cases:
+            print(f"[-] Error: Unknown ELEMENT_TYPE '{ELEMENT_TYPE}'")
+            sys.exit(1)
 
-        charges = np.concatenate([
-            np.full(n_antiproton, -1, dtype=np.int8),
-            np.full(n_proton,     +1, dtype=np.int8)
-        ])
-        np.random.shuffle(charges)  # randomise species order
-
-        R = np.zeros((N, 3), dtype=np.float32)
-        R[:, 0] = np.random.normal(mock.get("mu_x", 0.0), mock.get("sigma_x", 0.05), N)
-        R[:, 1] = np.random.normal(mock.get("mu_y", 0.0), mock.get("sigma_y", 0.05), N)
-
-        V = np.zeros((N, 3), dtype=np.float32)
-        V[:, 0] = np.random.normal(mock.get("mu_vx", 0.0), mock.get("sigma_vx", 5000.0),    N)
-        V[:, 1] = np.random.normal(mock.get("mu_vy", 0.0), mock.get("sigma_vy", 5000.0),    N)
-        V[:, 2] = np.random.normal(mock.get("mu_vz", 284802835.0), mock.get("sigma_vz", 10000.0), N)
-
-        c_light  = 299792458.0
-        v_mag_sq = np.sum(V**2, axis=1)
-        v_mag_sq = np.clip(v_mag_sq, 0.0, (0.999 * c_light)**2)
-        gamma    = (1.0 / np.sqrt(1.0 - v_mag_sq / c_light**2)).astype(np.float32)
-
-        print(f"[Main] Generated {N} mock particles "
-              f"({n_antiproton} antiprotons, {n_proton} protons).")
-
-    # Apply Calibration Mode (Forces transverse velocities to zero)
-    # Apply Calibration Mode (Forces transverse velocities to zero)
-    if config_dict.get("config", {}).get("calibration_mode", False) or config_dict.get("calibration_mode", False):
-        # Preserve total velocity/momentum, just make it perfectly straight
-        v_mag = np.sqrt(np.sum(V**2, axis=1))
-        V[:, 0] = 0.0
-        V[:, 1] = 0.0
-        V[:, 2] = v_mag
-        # Gamma remains untouched because the velocity magnitude is identical
-        print("[Main] CALIBRATION MODE ENABLED: Transverse velocities forced to 0.0.")
-
-    # 3. Execution
-    mode = config_dict.get("mode", "visual")
-
-    from transport.dependencies.boris_solver import run_physics_loop
-
-    if mode == "headless":
-        print("[Main] Mode: HEADLESS DIAGNOSTIC RUN")
-        headless_time_ns = config_dict.get("headless_time_ns", 150.0)
-        print(f"[Main] Starting physics simulation for {headless_time_ns} ns…")
-
-        R_init = R.copy()
-        V_init = V.copy()
-        gamma_init = gamma.copy()
-
-        R_final, V_final, alive_mask, death_causes = run_physics_loop(
-            R, V, gamma, None, None, None, None, config_dict, machine,
-            headless=True, headless_time_ns=headless_time_ns,
-            charges=charges
-        )
-
-        # Statistics
-        total_particles = len(alive_mask)
-        alive_count     = int(np.sum(alive_mask))
-        dead_count      = total_particles - alive_count
-
-        if alive_count > 0:
-            distance = np.mean(R_final[alive_mask, 2])
-        else:
-            distance = np.nanmax(R_final[:, 2])
-
-        # Output directory
         import datetime
-        timestamp    = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        runs_path    = os.path.join(os.path.dirname(__file__), "runs")
-        os.makedirs(runs_path, exist_ok=True)
-        unique_dir   = os.path.join(runs_path, f"run_{timestamp}")
-        os.makedirs(unique_dir, exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_outputs_dir = os.path.join("transport", "validation", "outputs", f"run_{timestamp}")
+        print(f"[Validator] Outputs for this run will be saved in: {run_outputs_dir}\n")
 
-        # Report
-        n_pbar_init = int(np.sum(charges == -1))
-        n_pbar_survived = int(np.sum((charges == -1) & alive_mask))
-        n_pbar_annihilated = n_pbar_init - n_pbar_survived
-        rate_pbar = n_pbar_survived / n_pbar_init if n_pbar_init > 0 else 0.0
+        overall_passed = True
+        for case in cases:
+            case_name = case.name.lower().replace("validation", "")
+            case_dir = os.path.join(run_outputs_dir, case_name)
+            os.makedirs(case_dir, exist_ok=True)
+            report_file_path = os.path.join(case_dir, "report.txt")
 
-        n_prot_init = int(np.sum(charges == 1))
-        n_prot_survived = int(np.sum((charges == 1) & alive_mask))
-        n_prot_annihilated = n_prot_init - n_prot_survived
-        rate_prot = n_prot_survived / n_prot_init if n_prot_init > 0 else 0.0
+            passed, metrics, report = Validator.run(case, case.dt, case.max_steps, run_outputs_dir=run_outputs_dir)
+            print(report)
+            print()
+            if not passed:
+                overall_passed = False
 
-        report_path = os.path.join(unique_dir, "report.txt")
-        with open(report_path, "w", encoding="utf-8") as f:
-            f.write(f"Time: {headless_time_ns} ns\n")
-            f.write(f"Distance traveled: {distance:.4f} m\n")
-            f.write(f"Particles alive: {alive_count}\n")
-            f.write(f"Particles died: {dead_count}\n")
-            f.write("Cause of loss:\n")
-            
-            # Species-specific cause of loss formatting: {pbar}, {proton}
-            dump_lost = death_causes.get("Dump", [0, 0])
-            cw_lost = death_causes.get("Chamber wall", [0, 0])
-            filt_lost = death_causes.get("Aperture rejected", [0, 0])
-            pw_lost = death_causes.get("Pipe wall", [0, 0])
-            surv_stat = death_causes.get("Survived", [0, 0])
-            
-            f.write(f"Dump: {dump_lost[0]}, {dump_lost[1]}\n")
-            f.write(f"Chamber wall: {cw_lost[0]}, {cw_lost[1]}\n")
-            f.write(f"Filtration: {filt_lost[0]}, {filt_lost[1]}\n")
-            f.write(f"Pipe wall: {pw_lost[0]}, {pw_lost[1]}\n")
-            f.write(f"Survived: {surv_stat[0]}, {surv_stat[1]}\n")
-            
-            # Add charge-resolved survival table at every major element
-            major_elements = [("Target", -0.1)]
-            if getattr(machine, 'is_acol', False):
-                all_elements = []
-                for el in machine.prism_elements:
-                    all_elements.append((el, el.z_start, el.z_end))
-                for el in machine.matching_elements:
-                    all_elements.append((el, el.z_start, el.z_end))
-                for el in machine.fodo_elements:
-                    all_elements.append((el, el.z_start + machine.fodo_start_z, el.z_end + machine.fodo_start_z))
-                    
-                for el, z_start, z_end in all_elements:
-                    el_type = type(el).__name__
-                    s_start = z_start - 0.5
-                    
-                    if el_type == "MagneticHorn":
-                        major_elements.append(("Lens", z_end))
-                    elif el_type == "Quadrupole":
-                        if abs(s_start - 0.0) < 0.1: name = "QFO0050"
-                        elif abs(s_start - 5.0) < 0.1: name = "QDE0055"
-                        elif abs(s_start - 10.0) < 0.1: name = "QFO0060"
-                        elif abs(s_start - 15.0) < 0.1: name = "QDE0065"
-                        elif abs(s_start - 20.0) < 0.1: name = "QFO0070"
-                        elif abs(s_start - 25.0) < 0.1: name = "QDE0075"
-                        elif abs(s_start - 30.0) < 0.1: name = "QFO0080"
-                        elif abs(s_start - 35.0) < 0.1: name = "QDE0085"
-                        elif abs(s_start - 40.0) < 0.1: name = "QFO0090"
-                        elif abs(s_start - 45.0) < 0.1: name = "QDS0095"
-                        elif abs(s_start - 46.0) < 0.1: name = "QFS50"
-                        else: continue
-                        major_elements.append((name, z_end))
-                    elif el_type == "SelectorDipole":
-                        major_elements.append(("BHZ0058", z_end))
-                    elif el_type == "Dipole":
-                        if abs(s_start - 38.0) < 0.5:
-                            major_elements.append(("BHZ0088", z_end))
-                        elif abs(s_start - 46.0) < 0.5:
-                            major_elements.append(("Septum", z_end))
-            else:
-                for idx, el in enumerate(machine.prism_elements):
-                    if type(el).__name__ != "Drift":
-                        major_elements.append((f"{type(el).__name__}_{idx}", el.z_end))
-                for idx, el in enumerate(machine.matching_elements):
-                    if type(el).__name__ != "Drift":
-                        major_elements.append((f"{type(el).__name__}_M{idx}", el.z_end))
-                for idx, el in enumerate(machine.fodo_elements):
-                    if type(el).__name__ != "Drift":
-                        major_elements.append((f"{type(el).__name__}_P{idx}", el.z_end))
-            
-            f.write("\n")
-            f.write("Element      p̄     p\n")
-            f.write("------------------------\n")
-            for name, z_end in major_elements:
-                if name == "Target":
-                    pbar_cnt = n_pbar_init
-                    prot_cnt = n_prot_init
-                else:
-                    pbar_cnt = int(np.sum((charges == -1) & (R_final[:, 2] >= z_end)))
-                    prot_cnt = int(np.sum((charges == 1) & (R_final[:, 2] >= z_end)))
-                f.write(f"{name:<12}{pbar_cnt:>3}{prot_cnt:>8}\n")
-            f.write("\n")
-            
-            f.write(f"initial antiproton count: {n_pbar_init}\n")
-            f.write(f"antiprotons survived: {n_pbar_survived}\n")
-            f.write(f"antiprotons annihilated: {n_pbar_annihilated}\n")
-            f.write(f"antiproton survival rate: {rate_pbar:.4f}\n")
-            f.write(f"initial proton count: {n_prot_init}\n")
-            f.write(f"positive particles survived: {n_prot_survived}\n")
-            f.write(f"positive particles annihilated: {n_prot_annihilated}\n")
-            f.write(f"positive particles survival rate: {rate_prot:.4f}\n")
+            with open(report_file_path, "w") as f:
+                f.write(report)
+                f.write("\n\n")
 
-        print(f"\n[Main] Headless run complete. Report saved to: {report_path}")
+            converged, errors, report_conv = Validator.run_convergence(case, case.dt, case.max_steps_conv, run_outputs_dir=run_outputs_dir)
+            print(report_conv)
+            print()
+            if not converged:
+                overall_passed = False
 
-        # Upgraded Diagnostics
-        from transport.dependencies.diagnostics_tracker import generate_beam_diagnostics
-        generate_beam_diagnostics(R_init, V_init, gamma_init, charges, machine, config_dict, unique_dir)
+            with open(report_file_path, "a") as f:
+                f.write(report_conv)
 
-        # ============================================================
-        # REFERENCE PARTICLE DIAGNOSTIC
-        # ============================================================
-        from transport.dependencies.reference_diagnostic import run_reference_particle_diagnostic
-        run_reference_particle_diagnostic(machine, config_dict, unique_dir)
+            print("-" * 60)
+
+        if overall_passed:
+            print("\nSTATUS: PASS")
+            sys.exit(0)
+        else:
+            print("\nSTATUS: FAIL")
+            sys.exit(1)
 
     else:
-        print("[Main] Mode: VISUAL GPU RENDERING")
-        from transport.dependencies.viewport import run_renderer
+        print(f"[Main] Visualization enabled. Launching 3D Viewport for: {ELEMENT_TYPE}...")
+        from transport.validation.cases.drift import DriftValidation
+        from transport.validation.cases.dipole import DipoleValidation
+        from transport.visualization.viewport import run_renderer
+        from transport.physics.boris_solver import run_visual_physics_loop
 
-        N            = R.shape[0]
+        if ELEMENT_TYPE.lower() == "drift":
+            case = DriftValidation()
+            raw_data = {}
+        elif ELEMENT_TYPE.lower() == "dipole":
+            case = DipoleValidation()
+            raw_data = {
+                "dipole_chamber": {
+                    "length": 5.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "acceptance_aperture_radius": 0.05,
+                    "acceptance_aperture_x_offset": 0.0,
+                    "dump": {
+                        "length": 0.0,
+                        "width": 0.0,
+                        "height": 0.0,
+                        "position_z": 999.0,
+                        "x_offset": 0.0
+                    }
+                }
+            }
+        else:
+            print(f"[-] Error: ELEMENT_TYPE must be 'drift' or 'dipole' to visualize.")
+            sys.exit(1)
+
+        if USE_MOCK_DATA:
+            R_init = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
+            V_init = np.array([[0.0, 0.0, 100.0]], dtype=np.float64)
+            gamma_init = np.array([1.0], dtype=np.float64)
+            charges = np.array([-1], dtype=np.int8)
+            dt = 1e-3
+        else:
+            R_init, V_init, gamma_init, charges = case.initial_particles()
+            dt = case.dt
+
+        lattice = case.build_lattice()
+
+        # Build a beam of 100 slightly perturbed particles for visualization
+        N = 100
+        R_beam = np.tile(R_init, (N, 1))
+        V_beam = np.tile(V_init, (N, 1))
+        
+        # Add slight spatial and velocity perturbations
+        rng = np.random.default_rng(42)
+        R_beam[:, 0] += rng.normal(0.0, 0.0015, N)
+        R_beam[:, 1] += rng.normal(0.0, 0.0015, N)
+        if USE_MOCK_DATA:
+            V_beam[:, 0] += rng.normal(0.0, 1.5, N)
+            V_beam[:, 1] += rng.normal(0.0, 1.5, N)
+        else:
+            V_beam[:, 0] += rng.normal(0.0, 1.5e6, N)
+            V_beam[:, 1] += rng.normal(0.0, 1.5e6, N)
+        
+        charges_beam = np.tile(charges, N)
+        gamma_beam = np.tile(gamma_init, N)
+
+        # Setup shared memory IPC
         buffer_bytes = 2 * N * 3 * 4
-        shm          = SharedMemory(create=True, size=buffer_bytes)
+        shm = SharedMemory(create=True, size=buffer_bytes)
         shared_mem_name = shm.name
 
-        sync_queue         = mp.Queue(maxsize=5)
+        sync_queue = mp.Queue(maxsize=5)
         annihilation_queue = mp.Queue()
-        stop_event         = mp.Event()
+        stop_event = mp.Event()
 
-        # Extract visual properties from raw_data
-        r_pipe = raw_data.get("config", {}).get("R_PIPE", 0.05)
+        # Hide Geant4 environment chamber/target markers to focus on the validation element
+        env_data = {
+            "chamber_width": "1.0 m",
+            "chamber_length": "5.0 m",
+            "target_width": "0.0 mm",
+            "target_length": "0.0 m",
+            "target_position": "0 0 999.0 m"
+        }
 
+        # Spawn tracking physics thread and OpenGL renderer thread
         physics_proc = mp.Process(
-            target=run_physics_loop,
-            args=(R, V, gamma, shared_mem_name, sync_queue,
-                  annihilation_queue, stop_event,
-                  config_dict, machine),
-            kwargs={"charges": charges}
+            target=run_visual_physics_loop,
+            args=(R_beam, V_beam, gamma_beam, charges_beam, lattice, dt,
+                  shared_mem_name, sync_queue, stop_event)
         )
 
         renderer_proc = mp.Process(
             target=run_renderer,
             args=(shared_mem_name, sync_queue, stop_event, N, 1,
-                  annihilation_queue, r_pipe, raw_data, geant4_env, charges)
+                  annihilation_queue, 0.05, raw_data, env_data, charges_beam)
         )
 
         try:
             physics_proc.start()
             renderer_proc.start()
-
+            
             renderer_proc.join()
-
             stop_event.set()
             physics_proc.join(timeout=2.0)
             if physics_proc.is_alive():
                 physics_proc.terminate()
         except KeyboardInterrupt:
-            print("[Main] Caught KeyboardInterrupt. Shutting down…")
             stop_event.set()
             renderer_proc.terminate()
             physics_proc.terminate()
         finally:
             shm.close()
             shm.unlink()
-            print("[Main] SharedMemory unlinked. Shutdown complete.")
-
 
 if __name__ == "__main__":
-    # Ensure clean separation on all OSes
-    mp.set_start_method('spawn')
     main()

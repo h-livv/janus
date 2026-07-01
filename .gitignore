@@ -1,3 +1,5 @@
+.venv/
+
 build/
 
 outputs/
@@ -8,7 +10,15 @@ reference_docs/
 
 runs/
 
+legacy_transport_optimization/
+
+logs/
+
 stitch_dataset.py
+
+validation_outputs/
+
+outputs/
 
 *.hdf5
 

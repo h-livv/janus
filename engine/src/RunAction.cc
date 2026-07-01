@@ -19,7 +19,7 @@ RunAction::RunAction()
   accumulableManager->Register(fEdep);
   
   auto analysisManager = G4AnalysisManager::Instance();
-  analysisManager->SetDefaultFileType("hdf5");
+  analysisManager->SetDefaultFileType("root");
   analysisManager->SetNtupleMerging(true);
   analysisManager->SetFileName("janus_data");
 

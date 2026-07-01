@@ -1,7 +1,8 @@
 import argparse
 import sys
 import os
-import h5py
+import uproot
+import awkward as ak
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -9,75 +10,68 @@ import glob
 
 def main():
     parser = argparse.ArgumentParser(description="Janus Physical Validation Suite (Phase 4)")
-    parser.add_argument("val_hdf5", type=str, nargs='?', help="Path to the validation.hdf5 file (optional)")
-    parser.add_argument("sim_hdf5", type=str, nargs='?', help="Path to the simulation.hdf5 file (optional)")
+    parser.add_argument("val_root", type=str, nargs='?', help="Path to the validation.root file (optional)")
+    parser.add_argument("sim_root", type=str, nargs='?', help="Path to the simulation.root file (optional)")
     args = parser.parse_args()
 
-    val_path = args.val_hdf5
-    sim_path = args.sim_hdf5
+    val_path = args.val_root
+    sim_path = args.sim_root
 
     if not val_path or not sim_path:
-        runs = glob.glob("outputs/run_*")
+        runs = glob.glob("runs/run_*")
         if not runs:
-            print("Fatal Error: No output directories found in outputs/ and no files provided.")
+            runs = glob.glob("outputs/run_*")
+        if not runs:
+            print("Fatal Error: No output directories found in runs/ or outputs/ and no files provided.")
             sys.exit(1)
         latest_run = max(runs, key=os.path.getmtime)
-        val_path = val_path or os.path.join(latest_run, "validation.hdf5")
-        sim_path = sim_path or os.path.join(latest_run, "simulation.hdf5")
+        val_path = val_path or os.path.join(latest_run, "validation.root")
+        sim_path = sim_path or os.path.join(latest_run, "simulation.root")
         print(f"[*] Auto-detected latest run for missing arguments.")
         print(f"    Validation: {val_path}")
         print(f"    Simulation: {sim_path}")
 
     try:
-        val_f = h5py.File(val_path, 'r')
-        sim_f = h5py.File(sim_path, 'r')
+        val_f = uproot.open(val_path)
+        sim_f = uproot.open(sim_path)
     except Exception as e:
-        print(f"Fatal Error: Could not open HDF5 files. Details: {e}")
+        print(f"Fatal Error: Could not open ROOT files. Details: {e}")
         sys.exit(1)
 
     run_name = os.path.basename(os.path.dirname(val_path))
     output_dir = os.path.join("validation", "validation_outputs", run_name)
     os.makedirs(output_dir, exist_ok=True)
 
-    def find_dataset(name, node):
-        if isinstance(node, h5py.Dataset) and (name in node.name):
-            return node
-        elif isinstance(node, h5py.Group):
-            for key in node:
-                res = find_dataset(name, node[key])
-                if res is not None:
-                    return res
-        return None
-
     # Load validation data
-    out_E_ds = find_dataset("outgoing_E/pages", val_f) or find_dataset("outgoing_E", val_f)
-    out_px_ds = find_dataset("outgoing_px/pages", val_f) or find_dataset("outgoing_px", val_f)
-    out_py_ds = find_dataset("outgoing_py/pages", val_f) or find_dataset("outgoing_py", val_f)
-    out_pz_ds = find_dataset("outgoing_pz/pages", val_f) or find_dataset("outgoing_pz", val_f)
-    out_pdg_ds = find_dataset("outgoing_pdg/pages", val_f) or find_dataset("outgoing_pdg", val_f)
-
-    if not all([out_E_ds, out_px_ds, out_pdg_ds]):
-        print("Fatal Error: Missing expected datasets in validation HDF5 file.")
+    if "Validation" not in val_f:
+        print("Fatal Error: Missing expected Validation tree in validation ROOT file.")
         sys.exit(1)
-
-    out_E = out_E_ds[:]
-    out_px = out_px_ds[:]
-    out_py = out_py_ds[:]
-    out_pz = out_pz_ds[:]
-    out_pdg = out_pdg_ds[:]
+        
+    val_tree = val_f["Validation"]
+    try:
+        out_E = [np.asarray(x) for x in val_tree["outgoing_E"].array(library="ak")]
+        out_px = [np.asarray(x) for x in val_tree["outgoing_px"].array(library="ak")]
+        out_py = [np.asarray(x) for x in val_tree["outgoing_py"].array(library="ak")]
+        out_pz = [np.asarray(x) for x in val_tree["outgoing_pz"].array(library="ak")]
+        out_pdg = [np.asarray(x) for x in val_tree["outgoing_pdg"].array(library="ak")]
+    except KeyError:
+        print("Fatal Error: Missing expected datasets in validation ROOT file.")
+        sys.exit(1)
 
     n_events = len(out_E)
 
     # Load simulation seeds data
-    trackID_ds = find_dataset("default_ntuples/Seeds/track_id/pages", sim_f) or find_dataset("track_id", sim_f)
-    z_ds = find_dataset("default_ntuples/Seeds/start_z/pages", sim_f) or find_dataset("start_z", sim_f)
-
-    if not all([trackID_ds, z_ds]):
-        print("Fatal Error: Missing expected datasets in simulation HDF5 file. Checked for track_id and start_z.")
+    if "Seeds" not in sim_f:
+        print("Fatal Error: Missing expected Seeds tree in simulation ROOT file.")
         sys.exit(1)
         
-    trackID_arr = trackID_ds[:]
-    z_arr = z_ds[:]
+    sim_tree = sim_f["Seeds"]
+    try:
+        trackID_arr = sim_tree["track_id"].array(library="np")
+        z_arr = sim_tree["start_z"].array(library="np")
+    except KeyError:
+        print("Fatal Error: Missing expected datasets in simulation ROOT file. Checked for track_id and start_z.")
+        sys.exit(1)
 
     print(f"========== JANUS PHYSICAL VALIDATION (PHASE 4) ==========")
     

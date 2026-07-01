@@ -27,4 +27,4 @@
 /gun/beam/offset 0 0 0 cm
 /gun/beam/energyDist Mono
 /gun/beam/energyMean 26 GeV
-/run/beamOn 100000
+/run/beamOn 10000

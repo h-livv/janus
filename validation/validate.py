@@ -1,6 +1,7 @@
 import argparse
 import sys
-import h5py
+import uproot
+import awkward as ak
 import numpy as np
 import os
 import glob
@@ -30,61 +31,49 @@ def get_q_b(pdg_code):
 
 def main():
     parser = argparse.ArgumentParser(description="Janus Validation Suite")
-    parser.add_argument("hdf5_file", type=str, nargs='?', help="Path to the validation.hdf5 file (optional, defaults to latest run)")
+    parser.add_argument("root_file", type=str, nargs='?', help="Path to the validation.root file (optional, defaults to latest run)")
     parser.add_argument("--epsilon", type=float, default=2.0, help="Tolerance for kinematic checks in MeV")
     args = parser.parse_args()
 
-    hdf5_path = args.hdf5_file
-    if not hdf5_path:
-        runs = glob.glob("outputs/run_*")
+    root_path = args.root_file
+    if not root_path:
+        runs = glob.glob("runs/run_*")
         if not runs:
-            print("Fatal Error: No output directories found in outputs/ and no file provided.")
+            # Fallback to outputs/ if runs/ doesn't exist
+            runs = glob.glob("outputs/run_*")
+        if not runs:
+            print("Fatal Error: No output directories found in runs/ or outputs/ and no file provided.")
             sys.exit(1)
         latest_run = max(runs, key=os.path.getmtime)
-        hdf5_path = os.path.join(latest_run, "validation.hdf5")
-        print(f"[*] No file provided. Auto-detected latest run: {hdf5_path}")
+        root_path = os.path.join(latest_run, "validation.root")
+        print(f"[*] No file provided. Auto-detected latest run: {root_path}")
 
     try:
-        f = h5py.File(hdf5_path, 'r')
+        f = uproot.open(root_path)
     except Exception as e:
-        print(f"Fatal Error: Could not open HDF5 file. Details: {e}")
+        print(f"Fatal Error: Could not open ROOT file. Details: {e}")
         sys.exit(1)
 
-    def find_dataset(name, node):
-        if isinstance(node, h5py.Dataset) and (name in node.name):
-            return node
-        elif isinstance(node, h5py.Group):
-            for key in node:
-                res = find_dataset(name, node[key])
-                if res is not None:
-                    return res
-        return None
-
-    init_E_ds = find_dataset("initial_E/pages", f) or find_dataset("initial_E", f)
-    init_px_ds = find_dataset("initial_px/pages", f) or find_dataset("initial_px", f)
-    init_py_ds = find_dataset("initial_py/pages", f) or find_dataset("initial_py", f)
-    init_pz_ds = find_dataset("initial_pz/pages", f) or find_dataset("initial_pz", f)
-
-    out_E_ds = find_dataset("outgoing_E/pages", f) or find_dataset("outgoing_E", f)
-    out_px_ds = find_dataset("outgoing_px/pages", f) or find_dataset("outgoing_px", f)
-    out_py_ds = find_dataset("outgoing_py/pages", f) or find_dataset("outgoing_py", f)
-    out_pz_ds = find_dataset("outgoing_pz/pages", f) or find_dataset("outgoing_pz", f)
-    out_pdg_ds = find_dataset("outgoing_pdg/pages", f) or find_dataset("outgoing_pdg", f)
-
-    if not all([init_E_ds, init_px_ds, out_E_ds, out_px_ds, out_pdg_ds]):
-        print("Fatal Error: Missing expected datasets in HDF5 file.")
+    if "Validation" not in f:
+        print("Fatal Error: Missing Validation tree in ROOT file.")
         sys.exit(1)
+        
+    tree = f["Validation"]
 
-    init_E = init_E_ds[:]
-    init_px = init_px_ds[:]
-    init_py = init_py_ds[:]
-    init_pz = init_pz_ds[:]
+    try:
+        init_E = tree["initial_E"].array(library="np")
+        init_px = tree["initial_px"].array(library="np")
+        init_py = tree["initial_py"].array(library="np")
+        init_pz = tree["initial_pz"].array(library="np")
 
-    out_E = out_E_ds[:]
-    out_px = out_px_ds[:]
-    out_py = out_py_ds[:]
-    out_pz = out_pz_ds[:]
-    out_pdg = out_pdg_ds[:]
+        out_E = [np.asarray(x) for x in tree["outgoing_E"].array(library="ak")]
+        out_px = [np.asarray(x) for x in tree["outgoing_px"].array(library="ak")]
+        out_py = [np.asarray(x) for x in tree["outgoing_py"].array(library="ak")]
+        out_pz = [np.asarray(x) for x in tree["outgoing_pz"].array(library="ak")]
+        out_pdg = [np.asarray(x) for x in tree["outgoing_pdg"].array(library="ak")]
+    except KeyError as e:
+        print(f"Fatal Error: Missing expected dataset {e} in ROOT file.")
+        sys.exit(1)
 
     n_events = len(init_E)
     if n_events == 0:
@@ -134,14 +123,9 @@ def main():
     # -------------------------------------------------------------------------
     # Phase 2: Quantum Number Gatekeeper (Discrete Conservation)
     # -------------------------------------------------------------------------
-    target_Z_ds = find_dataset("target_Z/pages", f) or find_dataset("target_Z", f)
-    target_A_ds = find_dataset("target_A/pages", f) or find_dataset("target_A", f)
-    
-    target_Z = target_Z_ds[:]
-    target_A = target_A_ds[:]
-    
-    beam_pdg_ds = find_dataset("beam_pdg/pages", f) or find_dataset("beam_pdg", f)
-    beam_pdg = beam_pdg_ds[:]
+    target_Z = tree["target_Z"].array(library="np")
+    target_A = tree["target_A"].array(library="np")
+    beam_pdg = tree["beam_pdg"].array(library="np")
     
     Q_INITIAL = np.zeros_like(target_Z, dtype=np.int32)
     B_INITIAL = np.zeros_like(target_A, dtype=np.int32)
@@ -212,7 +196,7 @@ def main():
     log_print("\n[+] Validation Suite Passed Successfully. Transport simulation may proceed.")
     
     # Write report to validation/validation_outputs/<run_name>
-    run_name = os.path.basename(os.path.dirname(hdf5_path))
+    run_name = os.path.basename(os.path.dirname(root_path))
     output_dir = os.path.join("validation", "validation_outputs", run_name)
     os.makedirs(output_dir, exist_ok=True)
     with open(os.path.join(output_dir, "phase_1_2_3_report.txt"), "w") as rf:

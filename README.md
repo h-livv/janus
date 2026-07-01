@@ -10,12 +10,15 @@ A stochastic framework for simulating and optimizing particle generation, with a
 
 <br>
 
+
 ---
 
+## Documentation
 
-## Transport pipeline featuring magnetic filtration
-
-<img width="500" height="400" alt="Janus — Antimatter Transport Pipeline (Ubuntu) 2026-06-22 00-01-56 - Trim" src="https://github.com/user-attachments/assets/07dd3201-5374-48c3-a213-1432b4781579" />
+- [Physics](docs/PHYSICS.md) - Physics, architecture and philosophy behind the project
+- [Collision Validation](docs/collision_validation.md) - Validation methodology and benchmark results for the collision engine
+- [Transport Validation](docs/transport_validation.md) - Validation studies for the transport solver and lattice elements
+- [Installation](docs/geant4_installation) - Building Geant4 and setting up Janus
 
 ---
 
@@ -34,30 +37,25 @@ A stochastic framework for simulating and optimizing particle generation, with a
   * Vertex distribution
   * Energy spectra
 
-Detailed validation study with outputs is available in [docs/collision_validation.md](docs/collision_validation.md).<br>
+Detailed validation study with outputs is available in [docs/collision_validation.md](docs/collision_validation.md)<br>
 
-This study verifies that the Janus physics engine satisfies conservation laws, statistical benchmarks, and phenomenological validation criteria, providing confidence in the generated data for downstream applications.
-
-The validation framework verifies conservation laws, statistical benchmarks, and phenomenological observables, providing confidence in generated datasets before transport and optimization studies.
+The validation framework verifies that the Janus physics engine satisfies conservation laws, statistical benchmarks, and phenomenological observables, providing confidence in generated datasets before transport and optimization studies.
 
 ---
 
-## Transport Optimization studies
+## Transport Validation
 
-[docs/optimization_exploration.md](docs/optimization_exploration.md) consists of an inital optimization framework for antiproton transport withing Janus.<br>
+`transport/validation` verifies the numerical accuracy of the transport solver before beam-level optimization studies.
 
-A deterministic transport model consisting of a magnetic horn and quadrupoles was successfully optimized and generalized using a hybrid Differential Evolution + Nelder-Mead strategy.<br>
+Validation currently includes:
 
-Observations:
-* Local optimization alone is insufficient for highly discontinuous transport landscapes.
-* Global exploration is essential for identifying high-quality beamline configurations.
-* Excessive horn currents do not necessarily maximize transport efficiency.
+- Analytical validation of individual lattice elements
+- Boris integrator conservation tests
+- Timestep convergence studies
 
-Results:
-* The model was trained on momentum-cut ~1000 antiprotons and tested on ~400 antiprotons with unseen trajectories.
-* Achieved **54.26%** survival on the training set and **53.42%** on the testing set.
+Optimization studies are performed only after the underlying numerical methods and physical models have been independently validated.
 
-These results establish a strong baseline for future Janus transport studies involving realistic magnetic field models, stochastic interactions, cooling systems, trap injection, and full antimatter storage pipelines.
+Transport validation studies are continuously updated in [docs/transport_validation.md](docs/transport_validation.md)
 
 ---
 
@@ -72,22 +70,18 @@ These results establish a strong baseline for future Janus transport studies inv
 
 ### Dataset Generation
 - Automated simulation orchestration
-- HDF5 and NPZ dataset generation
+- ROOT and NPZ dataset generation
 - Large-scale Monte Carlo runs
 - Species and momentum filtering pipelines
 
 ### Transport Pipeline
-- Relativistic Boris particle tracking
-- Magnetic horn
-- Dipoles, quadrupoles, drifts, and septa
-- ACOL-inspired antiproton injection lattice
-- Beam loss and aperture modelling
-
-### Optimization & Diagnostics
-- Injection efficiency optimization
-- Beam envelope and phase-space diagnostics
-- Dispersion and loss-map analysis
-- Interactive beamline visualization
+- Modular and physics-agnostic lattice structure
+  * Drift spaces
+  * Dipoles
+  * Quadrupoles
+  * Extensible beamline elements
+- Validated Drift and Dipole elements
+- Validation and convergence studies
 
 ---
 
@@ -114,16 +108,13 @@ janus/
 │   ├── run_batches.py       # Script to execute multiple batches consecutively
 │   └── dependencies/        # Collision pipeline logic and interface utilities
 │
-├── transport/               # Transport simulation runner & pipeline
-│   ├── config.json          # Default configuration for transport runs
-│   ├── config_headless.json # Headless configuration for transport runs
-│   ├── main.py              # Main entry point for transport simulation
-│   └── dependencies/        # Transport solver, lattice, diagnostics, and viewport logic
-│       ├── boris_solver.py  # Boris algorithm solver
-│       ├── data_io.py       # I/O utilities for transport datasets
-│       ├── diagnostics.py   # Simulation diagnostics
-│       ├── lattice.py       # Lattice and field definitions
-│       └── viewport.py      # Visualization viewport interface
+├── transport/               # Transport simulation and validation
+│   ├── main.py              # Main file to run the simulation
+│   ├── io                   # Data management
+│   ├── physics              # Solver and timestepping
+│   ├── lattice              # The lattice
+│   ├── visualization        # Visualization interface
+│   └── validation           # Transport solver, lattice, diagnostics, and viewport logic
 │
 └── validation               # Automated test and validation scripts
     ├── physical_validation.py
@@ -135,21 +126,27 @@ janus/
 
 ## Roadmap
 
-- Implementation of higher-level antimatter transport and storage pipeline:
-  * Magnetic Filtration
+- Validation
+  * Single-structure validation
+  * Composite lattice validation
+  * Beam analysis and validation
+
+- Optimization
+  * Geant4 particle production
+  * Transport elements
+  * Beam optics
+
+- Higher-level transport
+  * Deceleration
   * Cooling
   * Trapping
-- Implementation of optimization algorithms to study antimatter yield
-  * Beam analysis
-  * Stochastic and Electron Cooling
-  * Trapping
-- Continued development of optimization frameworks for transport efficiency and antimatter yield
 
+- Higher-level and global optimization
 ---
 
 ## Acknowledgements
 
-The core collision engine of Janus is built upon the Geant4 simulation toolkit. If you utilize this framework for academic or research purposes, ensure you cite the following resources:
+The core collision engine of Janus is built upon the Geant4 simulation toolkit:
 
 [Recent Developments in Geant4](https://www.sciencedirect.com/science/article/pii/S0168900216306957), J. Allison et al., Nucl. Instrum. Meth. A 835 (2016) 186-225<br>
 [Geant4 Developments and Applications](https://ieeexplore.ieee.org/document/1610988), J. Allison et al., IEEE Trans. Nucl. Sci. 53 (2006) 270-278<br>

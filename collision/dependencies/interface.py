@@ -20,8 +20,8 @@ PROJECT_ROOT = BASE_DIR.parent
 EXECUTABLE = ENGINE_DIR / "build" / "janus"
 MACRO_PATH = ENGINE_DIR / "macros" / "run.mac"
 
-HARDCODED_H5_VAL = PROJECT_ROOT / "temp" / "validation.hdf5"
-HARDCODED_H5_SIM = PROJECT_ROOT / "temp" / "simulation.hdf5"
+HARDCODED_H5_VAL = PROJECT_ROOT / "temp" / "validation.root"
+HARDCODED_H5_SIM = PROJECT_ROOT / "temp" / "simulation.root"
 
 OUTPUT_DIR = PROJECT_ROOT / "runs"
 
@@ -487,8 +487,24 @@ class Simulation:
         # Data Packaging & Archiving
         # -------------------------------------------------
         
-        subprocess.run([sys.executable, str(BASE_DIR / "dependencies" / "merge.py"), str(PROJECT_ROOT / "temp" / "validation"), str(HARDCODED_H5_VAL)])
-        subprocess.run([sys.executable, str(BASE_DIR / "dependencies" / "merge.py"), str(PROJECT_ROOT / "temp" / "simulation"), str(HARDCODED_H5_SIM)])
+        def finalize_root_file(prefix, out_path):
+            prefix = Path(prefix)
+            p = prefix.parent
+            name = prefix.name
+            expected_merged_file = p / f"{name}.root"
+            out_path = Path(out_path)
+            
+            if expected_merged_file.exists() and expected_merged_file != out_path:
+                shutil.move(str(expected_merged_file), str(out_path))
+            
+            thread_files = list(p.glob(f"{name}_t*.root"))
+            if thread_files:
+                print(f"[-] Warning: Thread files {name}_t*.root exist. Geant4 native merging might have failed.")
+                if not out_path.exists():
+                    shutil.copy(str(thread_files[0]), str(out_path))
+
+        finalize_root_file(PROJECT_ROOT / "temp" / "validation", HARDCODED_H5_VAL)
+        finalize_root_file(PROJECT_ROOT / "temp" / "simulation", HARDCODED_H5_SIM)
         
         if HARDCODED_H5_VAL.exists() and HARDCODED_H5_SIM.exists():
             # 1. Generate unique run name and create the directory
@@ -496,9 +512,9 @@ class Simulation:
             run_folder = OUTPUT_DIR / run_name
             run_folder.mkdir(parents=True, exist_ok=True)
             
-            # 2. Define the new HDF5 paths
-            new_val_path = run_folder / "validation.hdf5"
-            new_sim_path = run_folder / "simulation.hdf5"
+            # 2. Define the new ROOT paths
+            new_val_path = run_folder / "validation.root"
+            new_sim_path = run_folder / "simulation.root"
             
             # 3. Move the C++ output files
             shutil.move(str(HARDCODED_H5_VAL), str(new_val_path))
@@ -513,7 +529,7 @@ class Simulation:
             
             print(f"[+] Run packaged successfully in: /runs/{run_name}/\n")
         else:
-            print("[-] Warning: Expected output HDF5 files not found. Data packaging skipped.\n")
+            print("[-] Warning: Expected output ROOT files not found. Data packaging skipped.\n")
 
         # -------------------------------------------------
         # Output Parsing
@@ -542,21 +558,44 @@ class Simulation:
 # =========================================================
 
 def get_validation_data(filepath):
-    import h5py
+    import uproot
+    import awkward as ak
     import numpy as np
     
     data = {}
-    with h5py.File(filepath, 'r') as f:
-        def extract_datasets(node):
-            if isinstance(node, h5py.Dataset):
-                name = node.name.split('/')[-1]
-                data[name] = np.array(node)
-            elif isinstance(node, h5py.Group):
-                for key in node:
-                    extract_datasets(node[key])
-        extract_datasets(f)
+    with uproot.open(filepath) as f:
+        # Check if the "Validation" tree exists
+        if "Validation" in f:
+            tree = f["Validation"]
+            for key in tree.keys():
+                branch = tree[key]
+                # Try to use awkward library for jagged arrays and np for flat arrays
+                arr = branch.array(library="ak")
+                
+                # If it's a jagged array of vectors, we can convert it to a list of numpy arrays
+                # to maintain exact backward compatibility with h5py outputs
+                if str(arr.type).startswith("var *"):
+                    data[key] = [np.asarray(x) for x in arr]
+                else:
+                    data[key] = np.asarray(arr)
+        else:
+            print(f"[-] Warning: 'Validation' tree not found in {filepath}")
     return data
 
 def get_simulation_data(filepath):
-    return get_validation_data(filepath)
+    import uproot
+    import awkward as ak
+    import numpy as np
+    
+    data = {}
+    with uproot.open(filepath) as f:
+        if "Seeds" in f:
+            tree = f["Seeds"]
+            for key in tree.keys():
+                branch = tree[key]
+                arr = branch.array(library="np")
+                data[key] = np.asarray(arr)
+        else:
+            print(f"[-] Warning: 'Seeds' tree not found in {filepath}")
+    return data
             
