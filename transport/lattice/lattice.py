@@ -22,6 +22,10 @@ class Element:
             return np.ones_like(x, dtype=bool)
         return (x**2 + y**2) < self.aperture_radius**2
 
+    def draw(self, view):
+        """Draw static geometry for this element. Override in subclasses."""
+        pass
+
 
 class Drift(Element):
     def __init__(self, length, aperture_radius=None):
@@ -30,6 +34,35 @@ class Drift(Element):
     def field(self, x, y, z):
         # Drift space has zero fields
         return np.zeros_like(x), np.zeros_like(y), np.zeros_like(z)
+
+    def draw(self, view):
+        from transport.visualization.primitives import (
+            COL_DRIFT,
+            COL_PIPE,
+            box_at,
+            draw_aperture_rings,
+            draw_pipe_wireframe,
+            tube_segment,
+        )
+
+        z0, z1 = self.z_start, self.z_end
+        cz = 0.5 * (z0 + z1)
+        span = max(self.aperture_radius, 0.02) if self.aperture_radius is not None else 0.05
+        box_at(
+            view,
+            width=span * 4.0,
+            height=span * 4.0,
+            depth=self.L,
+            cx=0.0,
+            cy=0.0,
+            cz=cz,
+            color=COL_DRIFT,
+            edge_color=(0.30, 0.60, 0.90, 0.50),
+        )
+        if self.aperture_radius is not None:
+            tube_segment(view, z0, z1, self.aperture_radius, COL_PIPE)
+            draw_pipe_wireframe(view, z0, z1, self.aperture_radius)
+            draw_aperture_rings(view, z0, z1, self.aperture_radius)
 
 
 class Dipole(Element):
@@ -45,6 +78,35 @@ class Dipole(Element):
         np.full_like(y, self.By),
         np.zeros_like(z),
     )
+
+    def draw(self, view):
+        from transport.visualization.primitives import (
+            COL_DIPOLE_FIELD,
+            COL_PIPE,
+            box_at,
+            draw_aperture_rings,
+            draw_pipe_wireframe,
+            tube_segment,
+        )
+
+        z0, z1 = self.z_start, self.z_end
+        cz = 0.5 * (z0 + z1)
+        span = max(self.aperture_radius, 0.02) if self.aperture_radius is not None else 0.05
+        box_at(
+            view,
+            width=span * 4.0,
+            height=span * 4.0,
+            depth=self.L,
+            cx=0.0,
+            cy=0.0,
+            cz=cz,
+            color=COL_DIPOLE_FIELD,
+            edge_color=(0.4, 0.0, 0.8, 0.5),
+        )
+        if self.aperture_radius is not None:
+            tube_segment(view, z0, z1, self.aperture_radius, COL_PIPE)
+            draw_pipe_wireframe(view, z0, z1, self.aperture_radius)
+            draw_aperture_rings(view, z0, z1, self.aperture_radius)
 
 
 class SimpleLattice:
@@ -113,3 +175,18 @@ class SimpleLattice:
             if el:
                 return el.inside_aperture(x, y, z)
             return False
+
+    def draw(self, view, elements=None):
+        """
+        Compose visualization for all elements or a requested subset.
+        elements: None (all), list of Element instances, or list of indices.
+        """
+        if elements is None:
+            targets = self.elements
+        elif elements and isinstance(elements[0], Element):
+            targets = elements
+        else:
+            targets = [self.elements[i] for i in elements]
+
+        for el in targets:
+            el.draw(view)

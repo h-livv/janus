@@ -11,6 +11,7 @@ class DriftValidation(ValidationCase):
         self.L = 10.0
         self.v_mag = 289953335.7
         self.gamma = 3.9395
+        self.aperture_radius = None
 
     def get_custom_error_data(self, diagnostics, analytical):
         t = diagnostics["time"]
@@ -31,7 +32,7 @@ class DriftValidation(ValidationCase):
         }
 
     def build_lattice(self):
-        return SimpleLattice([Drift(self.L)], z_start=self.z_start)
+        return SimpleLattice([Drift(self.L, aperture_radius=self.aperture_radius)], z_start=self.z_start)
 
     def initial_particles(self):
         latest_file = get_latest_run_file(outputs_dir_name="runs", target_filename="simulation.root")

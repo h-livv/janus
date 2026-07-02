@@ -113,26 +113,10 @@ def main():
 
         if ELEMENT_TYPE.lower() == "drift":
             case = DriftValidation()
-            raw_data = {}
+            case.aperture_radius = 0.05
         elif ELEMENT_TYPE.lower() == "dipole":
             case = DipoleValidation()
-            raw_data = {
-                "dipole_chamber": {
-                    "length": 5.0,
-                    "width": 1.0,
-                    "height": 1.0,
-                    "acceptance_aperture_radius": 0.05,
-                    "acceptance_aperture_x_offset": 0.0,
-                    "dump": {
-                        "length": 0.0,
-                        "width": 0.0,
-                        "height": 0.0,
-                        "position_z": 999.0,
-                        "x_offset": 0.0
-                    }
-                }
-            }
-            case.aperture_radius = raw_data["dipole_chamber"]["acceptance_aperture_radius"]
+            case.aperture_radius = 0.05
         else:
             print(f"[-] Error: ELEMENT_TYPE must be 'drift' or 'dipole' to visualize.")
             sys.exit(1)
@@ -174,19 +158,8 @@ def main():
         shared_mem_name = shm.name
 
         sync_queue = mp.Queue(maxsize=5)
-        annihilation_queue = mp.Queue()
         stop_event = mp.Event()
 
-        # Hide Geant4 environment chamber/target markers to focus on the validation element
-        env_data = {
-            "chamber_width": "1.0 m",
-            "chamber_length": "5.0 m",
-            "target_width": "0.0 mm",
-            "target_length": "0.0 m",
-            "target_position": "0 0 999.0 m"
-        }
-
-        # Spawn tracking physics thread and OpenGL renderer thread
         physics_proc = mp.Process(
             target=run_visual_physics_loop,
             args=(R_beam, V_beam, gamma_beam, charges_beam, lattice, dt,
@@ -196,7 +169,7 @@ def main():
         renderer_proc = mp.Process(
             target=run_renderer,
             args=(shared_mem_name, sync_queue, stop_event, N, 1,
-                  annihilation_queue, 0.05, raw_data, env_data, charges_beam)
+                  lattice, charges_beam, None)
         )
 
         try:
