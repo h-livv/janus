@@ -33,10 +33,11 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W, lattice,
     base_rgb[pbar_mask] = _COL_ANTIPROTON
     base_rgb[prot_mask] = _COL_PROTON
 
-    alphas = np.exp(-np.linspace(3.0, 0.0, W)).astype(np.float32)
+    alphas = np.exp(-np.linspace(50.0, 0.0, W)).astype(np.float32)
     alphas /= alphas.max()
 
     trail_colors = np.empty((W, N, 4), dtype=np.float32)
+
     for age in range(W):
         trail_colors[age, :, :3] = base_rgb
         trail_colors[age, :, 3] = alphas[age]
@@ -58,6 +59,11 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W, lattice,
     lattice.draw(view, elements=elements)
 
     markers = scene.visuals.Markers(parent=view.scene)
+    markers.set_gl_state(
+    blend=True,
+    depth_test=False,
+    blend_func=("src_alpha", "one_minus_src_alpha"),
+)
     hud_text = Text("", parent=canvas.scene, color="white", bold=True, font_size=14)
     hud_text.pos = canvas.size[0] // 2, 24
 
@@ -92,16 +98,19 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W, lattice,
             ),
             axis=0,
         )
-        ordered_colors = np.concatenate(
-            (
-                trail_colors[current_head + 1:],
-                trail_colors[:current_head + 1],
-            ),
-            axis=0,
-        )
+
 
         flat_pos = ordered_positions.reshape(-1, 3)
-        flat_colors = ordered_colors.reshape(-1, 4)
+
+        flat_colors = trail_colors.reshape(-1, 4)
+
+        '''for age in range(W):
+            start = age * N
+            end = (age + 1) * N
+
+            flat_colors[start:end, :3] = base_rgb
+            flat_colors[start:end, 3] = alphas[age]'''
+
         valid = ~np.isnan(flat_pos).any(axis=1)
 
         if np.any(valid):
@@ -127,7 +136,7 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W, lattice,
                 f"p-bar Alive: {n_pbar_live}/{total_pbar} ({pbar_survival:.1f}%)"
             )
 
-    vispy.app.Timer("auto", connect=on_timer, start=True)
+    timer = vispy.app.Timer("auto", connect=on_timer, start=True)
 
     try:
         print("[Renderer] Starting VisPy application (PyQt5 backend)…")
