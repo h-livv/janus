@@ -12,170 +12,141 @@ if __name__ == "__main__":
         pass
 
 # ── Settings ───────────────────────────────────────────────────────────────
-VISUALIZATION_ENABLED = True  # Toggle to True to launch 3D OpenGL Viewport
+VISUALIZE = True               # True: 3D viewport; False: headless transport + validation
 ELEMENT_TYPE = "dipole"          # Options: "drift", "dipole", "all"
-USE_MOCK_DATA = True         # Toggle to True to use tame mock coordinates/velocities
+USE_MOCK_DATA = True           # True: tame mock coordinates/velocities
+
+Z_START = 0.0
+APERTURE_RADIUS = 0.05
+
+# Drift element
+DRIFT_LENGTH = 10.0
+DRIFT_DT = 1e-10
+DRIFT_MAX_STEPS = 500
+DRIFT_MAX_STEPS_CONV = 300
+
+# Dipole element
+DIPOLE_LENGTH = 5.0
+DIPOLE_BY = 1.0
+DIPOLE_DT = 1e-10
+DIPOLE_MAX_STEPS = 500
+DIPOLE_MAX_STEPS_CONV = 150
+
+# Mock transport parameters
+MOCK_DT = 1e-3
+MOCK_MAX_STEPS = 150
+MOCK_MAX_STEPS_CONV = 80
+MOCK_R_INIT = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
+MOCK_V_INIT = np.array([[0.0, 0.0, 100.0]], dtype=np.float64)
+MOCK_GAMMA_INIT = np.array([1.0], dtype=np.float64)
+MOCK_CHARGES = np.array([-1], dtype=np.int8)
+
+# Visualization beam
+VIS_BEAM_N = 100
+VIS_BEAM_POS_SIGMA = 0.0015
+VIS_BEAM_VEL_SIGMA_MOCK = 1.5
+VIS_BEAM_VEL_SIGMA_REAL = 1.5e6
+VIS_BEAM_RNG_SEED = 42
 # ───────────────────────────────────────────────────────────────────────────
 
+C_LIGHT = 299792458.0
+E_CHARGE = 1.602176634e-19
+M_P_KG = 1.67262192369e-27
+
+
 def main():
-    # Inject project root to sys.path
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
-    if not VISUALIZATION_ENABLED:
-        print("[Main] Visualization disabled. Carrying out validation tests normally...")
-        from transport.validation.validator import Validator
-        from transport.validation.cases.drift import DriftValidation
-        from transport.validation.cases.dipole import DipoleValidation
+    from transport.lattice.lattice import SimpleLattice, Drift, Dipole
+    from transport.physics.boris_solver import track_particles
 
-        cases = []
-        if ELEMENT_TYPE.lower() in ["drift", "all"]:
-            cases.append(DriftValidation())
-        if ELEMENT_TYPE.lower() in ["dipole", "all"]:
-            cases.append(DipoleValidation())
-
-        if USE_MOCK_DATA:
-            print("[Main] Overriding case parameters with tame mock data...")
-            def make_mock_initial_particles(case_instance):
-                def mock_initial_particles():
-                    R_init = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
-                    V_init = np.array([[0.0, 0.0, 100.0]], dtype=np.float64)
-                    gamma_init = np.array([1.0], dtype=np.float64)
-                    charges = np.array([-1], dtype=np.int8)
-                    
-                    # Set essential properties for lattice construction and analytical validation
-                    case_instance.z_start = 0.0
-                    case_instance.charge = -1
-                    case_instance.v_mag = 100.0
-                    case_instance.gamma = 1.0
-                    case_instance.B_rho = (1.0 * 1.67262192369e-27 * 100.0) / 1.602176634e-19
-                    case_instance.theta_entry = 0.0
-                    return R_init, V_init, gamma_init, charges
-                return mock_initial_particles
-            
-            for case in cases:
-                case.initial_particles = make_mock_initial_particles(case)
-                case.dt = 1e-3
-                case.max_steps = 150
-                case.max_steps_conv = 80
-
-        if not cases:
-            print(f"[-] Error: Unknown ELEMENT_TYPE '{ELEMENT_TYPE}'")
-            sys.exit(1)
-
-        import datetime
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_outputs_dir = os.path.join("transport", "validation", "outputs", f"run_{timestamp}")
-        print(f"[Validator] Outputs for this run will be saved in: {run_outputs_dir}\n")
-
-        overall_passed = True
-        for case in cases:
-            case_name = case.name.lower().replace("validation", "")
-            case_dir = os.path.join(run_outputs_dir, case_name)
-            os.makedirs(case_dir, exist_ok=True)
-            report_file_path = os.path.join(case_dir, "report.txt")
-
-            passed, metrics, report = Validator.run(case, case.dt, case.max_steps, run_outputs_dir=run_outputs_dir)
-            print(report)
-            print()
-            if not passed:
-                overall_passed = False
-
-            with open(report_file_path, "w") as f:
-                f.write(report)
-                f.write("\n\n")
-
-            converged, errors, report_conv = Validator.run_convergence(case, case.dt, case.max_steps_conv, run_outputs_dir=run_outputs_dir)
-            print(report_conv)
-            print()
-            if not converged:
-                overall_passed = False
-
-            with open(report_file_path, "a") as f:
-                f.write(report_conv)
-
-            print("-" * 60)
-
-        if overall_passed:
-            print("\nSTATUS: PASS")
-            sys.exit(0)
-        else:
-            print("\nSTATUS: FAIL")
-            sys.exit(1)
-
-    else:
-        print(f"[Main] Visualization enabled. Launching 3D Viewport for: {ELEMENT_TYPE}...")
-        from transport.validation.cases.drift import DriftValidation
-        from transport.validation.cases.dipole import DipoleValidation
-        from transport.visualization.viewport import run_renderer
-        from transport.physics.boris_solver import run_visual_physics_loop
-
-        if ELEMENT_TYPE.lower() == "drift":
-            case = DriftValidation()
-            case.aperture_radius = 0.05
-        elif ELEMENT_TYPE.lower() == "dipole":
-            case = DipoleValidation()
-            case.aperture_radius = 0.05
-        else:
+    if VISUALIZE:
+        if ELEMENT_TYPE.lower() not in ("drift", "dipole"):
             print(f"[-] Error: ELEMENT_TYPE must be 'drift' or 'dipole' to visualize.")
             sys.exit(1)
 
-        if USE_MOCK_DATA:
-            R_init = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
-            V_init = np.array([[0.0, 0.0, 100.0]], dtype=np.float64)
-            gamma_init = np.array([1.0], dtype=np.float64)
-            charges = np.array([-1], dtype=np.int8)
-            dt = 1e-3
+        print(f"[Main] Visualization enabled. Launching 3D Viewport for: {ELEMENT_TYPE}...")
+        from transport.visualization.viewport import run_renderer
+        from transport.physics.boris_solver import run_visual_physics_loop
+
+        element_type = ELEMENT_TYPE.lower()
+        if element_type == "drift":
+            lattice = SimpleLattice(
+                [Drift(DRIFT_LENGTH, aperture_radius=APERTURE_RADIUS)],
+                z_start=Z_START,
+            )
+            dt = MOCK_DT if USE_MOCK_DATA else DRIFT_DT
         else:
-            R_init, V_init, gamma_init, charges = case.initial_particles()
-            dt = case.dt
+            lattice = SimpleLattice(
+                [Dipole(DIPOLE_LENGTH, DIPOLE_BY, aperture_radius=APERTURE_RADIUS)],
+                z_start=Z_START,
+            )
+            dt = MOCK_DT if USE_MOCK_DATA else DIPOLE_DT
 
-        lattice = case.build_lattice()
+        if USE_MOCK_DATA:
+            R_init = MOCK_R_INIT.copy()
+            V_init = MOCK_V_INIT.copy()
+            gamma_init = MOCK_GAMMA_INIT.copy()
+            charges = MOCK_CHARGES.copy()
+        else:
+            from transport.io.data_io import get_latest_run_file, extract_cern_ad_seeds
 
-        # Build a beam of 100 slightly perturbed particles for visualization
-        N = 100
+            latest_file = get_latest_run_file(
+                outputs_dir_name="runs", target_filename="simulation.root"
+            )
+            R, V, gamma, all_charges = extract_cern_ad_seeds([latest_file])
+            if element_type == "dipole":
+                mask = all_charges == -1
+                if not np.any(mask):
+                    mask = all_charges == 1
+                if not np.any(mask):
+                    raise ValueError("No charged particles found in simulation.root")
+                idx = np.where(mask)[0][0]
+            else:
+                idx = 0
+            R_init = R[idx:idx + 1].astype(np.float64)
+            V_init = V[idx:idx + 1].astype(np.float64)
+            gamma_init = gamma[idx:idx + 1].astype(np.float64)
+            charges = all_charges[idx:idx + 1]
+
+        N = VIS_BEAM_N
         R_beam = np.tile(R_init, (N, 1))
         V_beam = np.tile(V_init, (N, 1))
-        
-        # Add slight spatial and velocity perturbations
-        rng = np.random.default_rng(42)
-        R_beam[:, 0] += rng.normal(0.0, 0.0015, N)
-        R_beam[:, 1] += rng.normal(0.0, 0.0015, N)
+        rng = np.random.default_rng(VIS_BEAM_RNG_SEED)
+        R_beam[:, 0] += rng.normal(0.0, VIS_BEAM_POS_SIGMA, N)
+        R_beam[:, 1] += rng.normal(0.0, VIS_BEAM_POS_SIGMA, N)
         if USE_MOCK_DATA:
-            V_beam[:, 0] += rng.normal(0.0, 1.5, N)
-            V_beam[:, 1] += rng.normal(0.0, 1.5, N)
+            V_beam[:, 0] += rng.normal(0.0, VIS_BEAM_VEL_SIGMA_MOCK, N)
+            V_beam[:, 1] += rng.normal(0.0, VIS_BEAM_VEL_SIGMA_MOCK, N)
         else:
-            V_beam[:, 0] += rng.normal(0.0, 1.5e6, N)
-            V_beam[:, 1] += rng.normal(0.0, 1.5e6, N)
-        
+            V_beam[:, 0] += rng.normal(0.0, VIS_BEAM_VEL_SIGMA_REAL, N)
+            V_beam[:, 1] += rng.normal(0.0, VIS_BEAM_VEL_SIGMA_REAL, N)
+
         charges_beam = np.tile(charges, N)
         gamma_beam = np.tile(gamma_init, N)
 
-        # Setup shared memory IPC
         buffer_bytes = 2 * N * 3 * 4
         shm = SharedMemory(create=True, size=buffer_bytes)
         shared_mem_name = shm.name
-
         sync_queue = mp.Queue(maxsize=5)
         stop_event = mp.Event()
 
         physics_proc = mp.Process(
             target=run_visual_physics_loop,
             args=(R_beam, V_beam, gamma_beam, charges_beam, lattice, dt,
-                  shared_mem_name, sync_queue, stop_event)
+                  shared_mem_name, sync_queue, stop_event),
         )
-
         renderer_proc = mp.Process(
             target=run_renderer,
             args=(shared_mem_name, sync_queue, stop_event, N, 1,
-                  lattice, charges_beam, None)
+                  lattice, charges_beam, None),
         )
 
         try:
             physics_proc.start()
             renderer_proc.start()
-            
             renderer_proc.join()
             stop_event.set()
             physics_proc.join(timeout=2.0)
@@ -188,6 +159,154 @@ def main():
         finally:
             shm.close()
             shm.unlink()
+        return
+
+    print("[Main] Visualization disabled. Running headless transport...")
+    from transport.validation.validator import Validator
+    from transport.validation.cases.drift import DriftValidation
+    from transport.validation.cases.dipole import DipoleValidation
+
+    case_types = []
+    if ELEMENT_TYPE.lower() in ("drift", "all"):
+        case_types.append("drift")
+    if ELEMENT_TYPE.lower() in ("dipole", "all"):
+        case_types.append("dipole")
+    if not case_types:
+        print(f"[-] Error: Unknown ELEMENT_TYPE '{ELEMENT_TYPE}'")
+        sys.exit(1)
+
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_outputs_dir = os.path.join("transport", "validation", "outputs", f"run_{timestamp}")
+    print(f"[Validator] Outputs for this run will be saved in: {run_outputs_dir}\n")
+
+    overall_passed = True
+    for case_type in case_types:
+        if case_type == "drift":
+            validation_case = DriftValidation()
+            validation_case.aperture_radius = APERTURE_RADIUS
+            lattice = SimpleLattice(
+                [Drift(DRIFT_LENGTH, aperture_radius=APERTURE_RADIUS)],
+                z_start=Z_START,
+            )
+            dt = MOCK_DT if USE_MOCK_DATA else DRIFT_DT
+            max_steps = MOCK_MAX_STEPS if USE_MOCK_DATA else DRIFT_MAX_STEPS
+            max_steps_conv = MOCK_MAX_STEPS_CONV if USE_MOCK_DATA else DRIFT_MAX_STEPS_CONV
+        else:
+            validation_case = DipoleValidation()
+            validation_case.aperture_radius = APERTURE_RADIUS
+            lattice = SimpleLattice(
+                [Dipole(DIPOLE_LENGTH, DIPOLE_BY, aperture_radius=APERTURE_RADIUS)],
+                z_start=Z_START,
+            )
+            dt = MOCK_DT if USE_MOCK_DATA else DIPOLE_DT
+            max_steps = MOCK_MAX_STEPS if USE_MOCK_DATA else DIPOLE_MAX_STEPS
+            max_steps_conv = MOCK_MAX_STEPS_CONV if USE_MOCK_DATA else DIPOLE_MAX_STEPS_CONV
+
+        if USE_MOCK_DATA:
+            R_init = MOCK_R_INIT.copy()
+            V_init = MOCK_V_INIT.copy()
+            gamma_init = MOCK_GAMMA_INIT.copy()
+            charges = MOCK_CHARGES.copy()
+            validation_case.z_start = Z_START
+            validation_case.v_mag = float(np.linalg.norm(V_init[0]))
+            validation_case.gamma = float(gamma_init[0])
+            if case_type == "dipole":
+                validation_case.charge = int(charges[0])
+                validation_case.theta_entry = 0.0
+                validation_case.B_rho = (1.0 * M_P_KG * validation_case.v_mag) / E_CHARGE
+        else:
+            from transport.io.data_io import get_latest_run_file, extract_cern_ad_seeds
+
+            latest_file = get_latest_run_file(
+                outputs_dir_name="runs", target_filename="simulation.root"
+            )
+            R, V, gamma, all_charges = extract_cern_ad_seeds([latest_file])
+            if case_type == "dipole":
+                mask = all_charges == -1
+                if not np.any(mask):
+                    mask = all_charges == 1
+                if not np.any(mask):
+                    raise ValueError("No charged particles found in simulation.root")
+                idx = np.where(mask)[0][0]
+            else:
+                idx = 0
+            R_init = R[idx:idx + 1].astype(np.float64)
+            V_init = V[idx:idx + 1].astype(np.float64)
+            gamma_init = gamma[idx:idx + 1].astype(np.float64)
+            charges = all_charges[idx:idx + 1]
+
+            z_start = float(R_init[0, 2])
+            lattice = SimpleLattice(
+                [Drift(DRIFT_LENGTH, aperture_radius=APERTURE_RADIUS)]
+                if case_type == "drift"
+                else [Dipole(DIPOLE_LENGTH, DIPOLE_BY, aperture_radius=APERTURE_RADIUS)],
+                z_start=z_start,
+            )
+            validation_case.z_start = z_start
+            validation_case.v_mag = float(np.linalg.norm(V_init[0]))
+            validation_case.gamma = float(
+                1.0 / np.sqrt(1.0 - (validation_case.v_mag / C_LIGHT) ** 2)
+            )
+            if case_type == "dipole":
+                v_perp = float(np.sqrt(V_init[0, 0] ** 2 + V_init[0, 2] ** 2))
+                validation_case.B_rho = validation_case.gamma * M_P_KG * v_perp / E_CHARGE
+                validation_case.theta_entry = float(
+                    np.arctan2(V_init[0, 0], V_init[0, 2])
+                )
+                validation_case.charge = int(charges[0])
+
+        validation_case.dt = dt
+        validation_case.max_steps = max_steps
+        validation_case.max_steps_conv = max_steps_conv
+
+        _, _, _, diagnostics = track_particles(
+            R_init, V_init, gamma_init, charges, lattice, dt, max_steps
+        )
+
+        case_name = validation_case.name.lower().replace("validation", "")
+        case_dir = os.path.join(run_outputs_dir, case_name)
+        os.makedirs(case_dir, exist_ok=True)
+        report_file_path = os.path.join(case_dir, "report.txt")
+
+        passed, metrics, report = Validator.run(
+            validation_case,
+            dt,
+            max_steps,
+            run_outputs_dir=run_outputs_dir,
+            diagnostics=diagnostics,
+            lattice=lattice,
+            R_init=R_init,
+        )
+        print(report)
+        print()
+        if not passed:
+            overall_passed = False
+
+        with open(report_file_path, "w") as f:
+            f.write(report)
+            f.write("\n\n")
+
+        converged, errors, report_conv = Validator.run_convergence(
+            validation_case, dt, max_steps_conv, run_outputs_dir=run_outputs_dir
+        )
+        print(report_conv)
+        print()
+        if not converged:
+            overall_passed = False
+
+        with open(report_file_path, "a") as f:
+            f.write(report_conv)
+
+        print("-" * 60)
+
+    if overall_passed:
+        print("\nSTATUS: PASS")
+        sys.exit(0)
+    else:
+        print("\nSTATUS: FAIL")
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

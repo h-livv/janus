@@ -4,19 +4,25 @@ from transport.validation.metrics import calculate_momentum_drift, calculate_ene
 
 class Validator:
     @staticmethod
-    def run(case, dt, max_steps, run_outputs_dir=None):
+    def run(case, dt, max_steps, run_outputs_dir=None, diagnostics=None, lattice=None, R_init=None):
         """
         Executes tracking on a ValidationCase and returns:
           passed (bool), metrics (dict), report (str)
-        """
-        # 1. Setup particles and lattice
-        R_init, V_init, gamma_init, charges = case.initial_particles()
-        lattice = case.build_lattice()
 
-        # 2. Track
-        R_final, V_final, alive_mask, diagnostics = track_particles(
-            R_init, V_init, gamma_init, charges, lattice, dt, max_steps
-        )
+        When diagnostics, lattice, and R_init are supplied, skips transport
+        integration and validates the provided simulation output only.
+        """
+        if diagnostics is None:
+            # 1. Setup particles and lattice
+            R_init, V_init, gamma_init, charges = case.initial_particles()
+            lattice = case.build_lattice()
+
+            # 2. Track
+            R_final, V_final, alive_mask, diagnostics = track_particles(
+                R_init, V_init, gamma_init, charges, lattice, dt, max_steps
+            )
+        elif lattice is None or R_init is None:
+            raise ValueError("lattice and R_init are required when diagnostics are provided")
 
         # 3. Compute analytical solution
         analytical = case.analytical_solution(diagnostics)
