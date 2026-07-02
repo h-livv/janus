@@ -107,8 +107,8 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W, lattice,
             pbar_survival = (n_pbar_live / total_pbar * 100.0) if total_pbar > 0 else 0.0
             hud_text.text = (
                 f"Distance: {center_z:.2f} m   |   "
-                f"p-bar Alive: {n_pbar_live}/{total_pbar} ({pbar_survival:.1f}%)   |   "
-                f"p Alive: {n_prot_live}"
+                f"p-bar Alive: {n_pbar_live}/{total_pbar} ({pbar_survival:.1f}%)   "
+                #f"p Alive: {n_prot_live}"
             )
 
     vispy.app.Timer("auto", connect=on_timer, start=True)

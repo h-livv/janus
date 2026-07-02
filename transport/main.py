@@ -17,33 +17,33 @@ ELEMENT_TYPE = "dipole"          # Options: "drift", "dipole", "all"
 USE_MOCK_DATA = True           # True: tame mock coordinates/velocities
 
 Z_START = 0.0
-APERTURE_RADIUS = 0.05
+APERTURE_RADIUS = 10.0
 
 # Drift element
 DRIFT_LENGTH = 10.0
-DRIFT_DT = 1e-10
+DRIFT_DT = 1e-6
 DRIFT_MAX_STEPS = 500
 DRIFT_MAX_STEPS_CONV = 300
 
 # Dipole element
-DIPOLE_LENGTH = 5.0
-DIPOLE_BY = 1.0
+DIPOLE_LENGTH = 100.0
+DIPOLE_BY = 0.01
 DIPOLE_DT = 1e-10
 DIPOLE_MAX_STEPS = 500
 DIPOLE_MAX_STEPS_CONV = 150
 
 # Mock transport parameters
-MOCK_DT = 1e-3
+MOCK_DT = 1e-8
 MOCK_MAX_STEPS = 150
 MOCK_MAX_STEPS_CONV = 80
-MOCK_R_INIT = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
-MOCK_V_INIT = np.array([[0.0, 0.0, 100.0]], dtype=np.float64)
+MOCK_R_INIT = np.array([[0.0, 0.0, 10.0]], dtype=np.float64)
+MOCK_V_INIT = np.array([[0.0, 0.0, 2000000.0]], dtype=np.float64)
 MOCK_GAMMA_INIT = np.array([1.0], dtype=np.float64)
 MOCK_CHARGES = np.array([-1], dtype=np.int8)
 
 # Visualization beam
 VIS_BEAM_N = 100
-VIS_BEAM_POS_SIGMA = 0.0015
+VIS_BEAM_POS_SIGMA = 0.15
 VIS_BEAM_VEL_SIGMA_MOCK = 1.5
 VIS_BEAM_VEL_SIGMA_REAL = 1.5e6
 VIS_BEAM_RNG_SEED = 42
