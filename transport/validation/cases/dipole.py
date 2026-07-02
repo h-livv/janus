@@ -21,13 +21,29 @@ class DipoleValidation(ValidationCase):
         self.v_mag = (self.P_mevc * C_LIGHT) / self.E_total
         self.B_rho = (self.P_mevc * 1e6) / C_LIGHT
         self.aperture_radius = None
+        self.lattice = None
+
+    def _dipole_element(self):
+        if self.lattice is not None:
+            for el in self.lattice.elements:
+                if hasattr(el, "By"):
+                    return el
+        return None
+
+    def _dipole_length(self):
+        el = self._dipole_element()
+        return el.L if el is not None else 5.0
+
+    def _dipole_by(self):
+        el = self._dipole_element()
+        return el.By if el is not None else 1.0
 
     def get_custom_error_data(self, diagnostics, analytical):
         t = diagnostics["time"]
         pos = diagnostics["position"][:, 0]
         alive = diagnostics["alive"][:, 0]
         
-        mask = (pos[:, 2] > self.z_start) & (pos[:, 2] <= self.z_start + 5.0) & alive
+        mask = (pos[:, 2] > self.z_start) & (pos[:, 2] <= self.z_start + self._dipole_length()) & alive
         x_track = pos[mask, 0]
         z_track = pos[mask, 2]
         
@@ -93,7 +109,7 @@ class DipoleValidation(ValidationCase):
         return R_init, V_init, gamma_init, charges_init
 
     def analytical_position(self, t, R_init, V_init, charges):
-        omega_c = (charges[0] * E_CHARGE * 1.0) / (self.gamma * M_P_KG)
+        omega_c = (charges[0] * E_CHARGE * self._dipole_by()) / (self.gamma * M_P_KG)
         x0, y0, z0 = R_init[0]
         vx0, vy0, vz0 = V_init[0]
         
@@ -108,12 +124,11 @@ class DipoleValidation(ValidationCase):
 
     def analytical_solution(self, diagnostics):
         # Cyclotron radius: R = B_rho / B
-        # For our 1.0 T field: R = B_rho
-        R_analytical = self.B_rho / 1.0
-        
+        By = self._dipole_by()
+        R_analytical = self.B_rho / By
+
         # Bending angle: theta = asin(sin(theta_entry) - q * B * L / p_perp) - theta_entry
-        By = 1.0
-        L = 5.0
+        L = self._dipole_length()
         arg = np.sin(self.theta_entry) - (self.charge * By * L / self.B_rho)
         theta_exit = np.arcsin(arg)
         theta_analytical = theta_exit - self.theta_entry
@@ -146,7 +161,7 @@ class DipoleValidation(ValidationCase):
         
         # Filter only when particle was inside the dipole (z_start <= z <= z_start + 5.0) and alive
         z_start = self.z_start
-        z_end = self.z_start + 5.0
+        z_end = self.z_start + self._dipole_length()
         mask = (pos[:, 2] > z_start) & (pos[:, 2] <= z_end) & alive
         x_track = pos[mask, 0]
         z_track = pos[mask, 2]
