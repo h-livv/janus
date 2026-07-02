@@ -167,7 +167,7 @@ class SimpleLattice:
                 if np.any(mask):
                     inside[mask] = el.inside_aperture(x[mask], y[mask], z[mask])
             # If outside the entire lattice, mark as dead/outside
-            outside_lattice = (z < self.z_start) | (z > self.z_start + self.total_length)
+            outside_lattice = (z > self.z_start + self.total_length)
             inside[outside_lattice] = False
             return inside
         else:
