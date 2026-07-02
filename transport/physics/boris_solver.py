@@ -32,37 +32,39 @@ def boris_velocity_push(R, V, gamma, dt, alive_mask, lattice, charges=None):
 
     V_alive = V[alive_mask]
     R_alive = R[alive_mask]
-    gamma_alive = gamma[alive_mask]
 
     Bx, By, Bz = lattice.get_field(R_alive[:, 0], R_alive[:, 1], R_alive[:, 2])
     B_alive = np.column_stack((Bx, By, Bz))
 
     if charges is None:
-        q_over_m = np.full(len(R_alive), -E_CHARGE / M_P_KG)
+        q = np.full(len(R_alive), -E_CHARGE)
     else:
-        q_over_m = (charges[alive_mask].astype(np.float64) * E_CHARGE) / M_P_KG
+        q = charges[alive_mask].astype(np.float64) * E_CHARGE
 
-    # 1. Electric field acceleration half-step: u_minus = gamma^n * v + q_over_m * E^n * (dt / 2)
-    # (Currently E = 0, but structured for future extensions)
-    u_minus = gamma_alive[:, np.newaxis] * V_alive
+    # E = 0 (structured for future extensions); PlasmaPy RelativisticBorisIntegrator
+    # (Birdsall & Langdon 2004, pp. 58-63), velocity push only.
+    E_alive = np.zeros_like(V_alive)
 
-    u_minus_sq = np.sum(u_minus**2, axis=1)
-    gamma_minus = np.sqrt(1.0 + u_minus_sq / C_LIGHT**2)
+    v_sq = np.sum(V_alive**2, axis=1, keepdims=True)
+    gamma_v = 1.0 / np.sqrt(1.0 - v_sq / C_LIGHT**2)
+    uvel = V_alive * gamma_v
 
-    # 2. Magnetic rotation step
-    t = q_over_m[:, np.newaxis] * B_alive * (dt / 2.0) / gamma_minus[:, np.newaxis]
-    t_sq = np.sum(t**2, axis=1)[:, np.newaxis]
+    uvel_minus = uvel + q[:, np.newaxis] * E_alive * dt / (2.0 * M_P_KG)
+
+    uvel_minus_sq = np.sum(uvel_minus**2, axis=1, keepdims=True)
+    gamma_1 = np.sqrt(1.0 + uvel_minus_sq / C_LIGHT**2)
+
+    t = q[:, np.newaxis] * B_alive * dt / (2.0 * gamma_1 * M_P_KG)
+    t_sq = np.sum(t**2, axis=1, keepdims=True)
     s = 2.0 * t / (1.0 + t_sq)
 
-    u_prime = u_minus + np.cross(u_minus, t)
-    u_plus = u_minus + np.cross(u_prime, s)
+    uvel_prime = uvel_minus + np.cross(uvel_minus, t)
+    uvel_plus = uvel_minus + np.cross(uvel_prime, s)
+    uvel_new = uvel_plus + q[:, np.newaxis] * E_alive * dt / (2.0 * M_P_KG)
 
-    # 3. Electric field acceleration second half-step: u_new = u_plus + q_over_m * E^n * (dt / 2)
-    u_new = u_plus
-
-    u_new_sq = np.sum(u_new**2, axis=1)
-    gamma_new = np.sqrt(1.0 + u_new_sq / C_LIGHT**2)
-    V_new = u_new / gamma_new[:, np.newaxis]
+    uvel_new_sq = np.sum(uvel_new**2, axis=1, keepdims=True)
+    gamma_new = np.sqrt(1.0 + uvel_new_sq / C_LIGHT**2)
+    V_new = uvel_new / gamma_new
 
     v_mag_sq = np.sum(V_new**2, axis=1)
     too_fast = v_mag_sq >= (0.999 * C_LIGHT)**2
@@ -70,10 +72,10 @@ def boris_velocity_push(R, V, gamma, dt, alive_mask, lattice, charges=None):
         v_mag = np.sqrt(v_mag_sq[too_fast])
         V_new[too_fast] = (V_new[too_fast] / v_mag[:, np.newaxis]) * (0.999 * C_LIGHT)
         v_cap_sq = np.sum(V_new[too_fast]**2, axis=1)
-        gamma_new[too_fast] = 1.0 / np.sqrt(1.0 - v_cap_sq / C_LIGHT**2)
+        gamma_new[too_fast, 0] = 1.0 / np.sqrt(1.0 - v_cap_sq / C_LIGHT**2)
 
     V[alive_mask] = V_new
-    gamma[alive_mask] = gamma_new
+    gamma[alive_mask] = gamma_new[:, 0]
 
     return V, gamma
 
