@@ -132,6 +132,7 @@ def main():
                     }
                 }
             }
+            case.aperture_radius = raw_data["dipole_chamber"]["acceptance_aperture_radius"]
         else:
             print(f"[-] Error: ELEMENT_TYPE must be 'drift' or 'dipole' to visualize.")
             sys.exit(1)

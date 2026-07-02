@@ -733,22 +733,28 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W,
                 flat_colors[idx * N: (idx + 1) * N, :3] = base_rgb
                 flat_colors[idx * N: (idx + 1) * N,  3] = alpha
 
-            markers.set_data(
-                pos        = trail_positions.reshape(-1, 3),
-                face_color = flat_colors,
-                edge_color = None,
-                size       = 7.0
-            )
+            flat_pos = trail_positions.reshape(-1, 3)
+            valid = ~np.isnan(flat_pos).any(axis=1)
+            if np.any(valid):
+                markers.set_data(
+                    pos        = flat_pos[valid],
+                    face_color = flat_colors[valid],
+                    edge_color = None,
+                    size       = 7.0
+                )
+            else:
+                markers.set_data(pos=np.empty((0, 3), dtype=np.float32))
             current_head = (current_head + 1) % W
 
-            # Camera tracking: follow beam centroid
-            if not np.all(np.isnan(new_positions[:, 2])):
-                center_z = float(np.nanmean(new_positions[:, 2]))
+            # Camera tracking: follow beam centroid from transport state
+            live_mask = ~np.isnan(new_positions).any(axis=1)
+            if np.any(live_mask):
+                center_z = float(np.nanmean(new_positions[live_mask, 2]))
                 view.camera.center = (0.0, 0.0, center_z)
 
-                current_N   = int(np.sum(~np.isnan(new_positions[:, 2])))
-                n_pbar_live = int(np.sum(~np.isnan(new_positions[pbar_mask, 2])))
-                n_prot_live = int(np.sum(~np.isnan(new_positions[prot_mask, 2])))
+                current_N   = int(np.sum(live_mask))
+                n_pbar_live = int(np.sum(live_mask & pbar_mask))
+                n_prot_live = int(np.sum(live_mask & prot_mask))
                 
                 # Calculate p-bar specific survival rate safely
                 pbar_survival = (n_pbar_live / total_pbar * 100.0) if total_pbar > 0 else 0.0

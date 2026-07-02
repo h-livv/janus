@@ -20,6 +20,7 @@ class DipoleValidation(ValidationCase):
         self.gamma = self.E_total / M_P_MEV
         self.v_mag = (self.P_mevc * C_LIGHT) / self.E_total
         self.B_rho = (self.P_mevc * 1e6) / C_LIGHT
+        self.aperture_radius = None
 
     def get_custom_error_data(self, diagnostics, analytical):
         t = diagnostics["time"]
@@ -54,7 +55,10 @@ class DipoleValidation(ValidationCase):
         # We can dynamically change the dipole parameters or return a standard one.
         # Let's use a 5.0m dipole with By = 1.0 T.
         # This will bend the antiproton by a measurable angle.
-        return SimpleLattice([Dipole(length=5.0, By=1.0)], z_start=self.z_start)
+        return SimpleLattice(
+            [Dipole(length=5.0, By=1.0, aperture_radius=self.aperture_radius)],
+            z_start=self.z_start,
+        )
 
     def initial_particles(self):
         latest_file = get_latest_run_file(outputs_dir_name="runs", target_filename="simulation.root")

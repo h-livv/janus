@@ -6,6 +6,23 @@ E_CHARGE  = 1.602176634e-19      # C
 M_P_KG    = 1.67262192369e-27    # kg
 M_P_MEV   = 938.2720813          # MeV/c^2
 
+
+def apply_aperture_losses(R, alive_mask, lattice):
+    """
+    Mark particles outside the active element aperture as lost.
+    Delegates boundary evaluation to the lattice element interface.
+    """
+    inside = lattice.inside_aperture(R[:, 0], R[:, 1], R[:, 2])
+    return alive_mask & inside
+
+
+def positions_for_render(R, alive_mask):
+    """Export transport positions; lost particles are NaN for the renderer."""
+    out = R.astype(np.float32)
+    out[~alive_mask] = np.nan
+    return out
+
+
 def relativistic_boris_step(R, V, gamma, dt, alive_mask, lattice, charges=None):
     """
     Perform a staggered Leapfrog integration step using the relativistic Boris solver.
@@ -87,6 +104,7 @@ def track_particles(R_init, V_init, gamma_init, charges, lattice, dt, max_steps)
     # Stagger initial velocity backward by dt/2 to obtain V^{-1/2}
     R_temp = R_init.copy()
     _, V, gamma = relativistic_boris_step(R_temp, V, gamma, -dt / 2.0, alive_mask, lattice, charges)
+    alive_mask = apply_aperture_losses(R, alive_mask, lattice)
 
     diagnostics = {
         "step": [],
@@ -135,9 +153,7 @@ def track_particles(R_init, V_init, gamma_init, charges, lattice, dt, max_steps)
         diagnostics["element"].append(element_names)
         diagnostics["alive"].append(alive_mask.copy())
 
-        # Aperture checks
-        inside = lattice.inside_aperture(R[:, 0], R[:, 1], R[:, 2])
-        alive_mask = alive_mask & inside
+        alive_mask = apply_aperture_losses(R, alive_mask, lattice)
 
         t += dt
 
@@ -188,10 +204,18 @@ def run_visual_physics_loop(R_init, V_init, gamma_init, charges, lattice, dt, sh
     # Stagger initial velocity backward by dt/2 to obtain V^{-1/2}
     R_temp = R_init.copy()
     _, V, gamma = relativistic_boris_step(R_temp, V, gamma, -dt / 2.0, alive_mask, lattice, charges)
-    
+    alive_mask = apply_aperture_losses(R, alive_mask, lattice)
+
     buffer_index = 0
     step = 0
     emission_rate = 1  # Emit every step for smooth trajectory rendering
+
+    shared_array[buffer_index] = positions_for_render(R, alive_mask)
+    try:
+        sync_queue.put(buffer_index, block=False)
+    except Exception:
+        pass
+    buffer_index = 1 - buffer_index
     
     import time
     
@@ -201,12 +225,10 @@ def run_visual_physics_loop(R_init, V_init, gamma_init, charges, lattice, dt, sh
             
         R, V, gamma = relativistic_boris_step(R, V, gamma, dt, alive_mask, lattice, charges)
         
-        # Aperture checks
-        inside = lattice.inside_aperture(R[:, 0], R[:, 1], R[:, 2])
-        alive_mask = alive_mask & inside
-        
+        alive_mask = apply_aperture_losses(R, alive_mask, lattice)
+
         if step % emission_rate == 0:
-            shared_array[buffer_index] = R.astype(np.float32)
+            shared_array[buffer_index] = positions_for_render(R, alive_mask)
             try:
                 sync_queue.put(buffer_index, block=False)
             except Exception:
