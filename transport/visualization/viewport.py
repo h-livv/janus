@@ -5,7 +5,7 @@ from multiprocessing.shared_memory import SharedMemory
 import vispy
 vispy.use("PyQt5")
 from vispy import scene
-from vispy.scene.visuals import Text
+from vispy.scene.visuals import Text, Line
 
 _COL_ANTIPROTON = np.array([0.00, 0.80, 1.00])
 _COL_PROTON = np.array([1.00, 0.18, 0.08])
@@ -32,7 +32,6 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W, lattice,
     total_pbar = int(np.sum(pbar_mask))
     base_rgb[pbar_mask] = _COL_ANTIPROTON
     base_rgb[prot_mask] = _COL_PROTON
-    flat_colors = np.zeros((W * N, 4), dtype=np.float32)
 
     canvas = scene.SceneCanvas(
         keys="interactive",
@@ -50,6 +49,10 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W, lattice,
 
     lattice.draw(view, elements=elements)
 
+    trail_lines = [
+        Line(parent=view.scene, connect="strip", width=1.5, antialias=True)
+        for _ in range(N)
+    ]
     markers = scene.visuals.Markers(parent=view.scene)
     hud_text = Text("", parent=canvas.scene, color="white", bold=True, font_size=14)
     hud_text.pos = canvas.size[0] // 2, 24
@@ -78,18 +81,29 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W, lattice,
         new_positions = shared_array[latest_idx].copy()
         trail_positions[current_head] = new_positions
 
-        for age in range(W):
-            idx = (current_head - age) % W
-            alpha = max(0.0, 1.0 - float(age) / W)
-            flat_colors[idx * N:(idx + 1) * N, :3] = base_rgb
-            flat_colors[idx * N:(idx + 1) * N, 3] = alpha
+        for p in range(N):
+            pts = []
+            cols = []
+            for age in range(W - 1, -1, -1):
+                slot = (current_head - age) % W
+                pos = trail_positions[slot, p]
+                if np.isnan(pos).any():
+                    continue
+                alpha = max(0.08, 1.0 - float(age) / W)
+                pts.append(pos)
+                cols.append([base_rgb[p, 0], base_rgb[p, 1], base_rgb[p, 2], alpha])
+            if len(pts) >= 2:
+                trail_lines[p].set_data(pos=np.array(pts, dtype=np.float32),
+                                        color=np.array(cols, dtype=np.float32))
+                trail_lines[p].visible = True
+            else:
+                trail_lines[p].visible = False
 
-        flat_pos = trail_positions.reshape(-1, 3)
-        valid = ~np.isnan(flat_pos).any(axis=1)
-        if np.any(valid):
+        live_mask = ~np.isnan(new_positions).any(axis=1)
+        if np.any(live_mask):
             markers.set_data(
-                pos=flat_pos[valid],
-                face_color=flat_colors[valid],
+                pos=new_positions[live_mask],
+                face_color=base_rgb[live_mask],
                 edge_color=None,
                 size=7.0,
             )
@@ -98,7 +112,6 @@ def run_renderer(shared_mem_name, sync_queue, stop_event, N, W, lattice,
 
         current_head = (current_head + 1) % W
 
-        live_mask = ~np.isnan(new_positions).any(axis=1)
         if np.any(live_mask):
             center_z = float(np.nanmean(new_positions[live_mask, 2]))
             view.camera.center = (0.0, 0.0, center_z)

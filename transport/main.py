@@ -47,6 +47,7 @@ VIS_BEAM_POS_SIGMA = 0.15
 VIS_BEAM_VEL_SIGMA_MOCK = 1.5
 VIS_BEAM_VEL_SIGMA_REAL = 1.5e6
 VIS_BEAM_RNG_SEED = 42
+VIS_TRAIL_LENGTH = 150
 # ───────────────────────────────────────────────────────────────────────────
 
 C_LIGHT = 299792458.0
@@ -140,7 +141,7 @@ def main():
         )
         renderer_proc = mp.Process(
             target=run_renderer,
-            args=(shared_mem_name, sync_queue, stop_event, N, 1,
+            args=(shared_mem_name, sync_queue, stop_event, N, VIS_TRAIL_LENGTH,
                   lattice, charges_beam, None),
         )
 
