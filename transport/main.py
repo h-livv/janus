@@ -14,10 +14,10 @@ if __name__ == "__main__":
 # ── Settings ───────────────────────────────────────────────────────────────
 VISUALIZE = True               # True: 3D viewport; False: headless transport + validation
 ELEMENT_TYPE = "dipole"          # Options: "drift", "dipole", "all"
-USE_MOCK_DATA = True           # True: tame mock coordinates/velocities
+USE_MOCK_DATA = False           # True: tame mock coordinates/velocities
 
 Z_START = 0.0
-APERTURE_RADIUS = 10.0
+APERTURE_RADIUS = 100.0
 
 # Drift element
 DRIFT_LENGTH = 100.0
@@ -27,7 +27,7 @@ DRIFT_MAX_STEPS_CONV = 300
 
 # Dipole element
 DIPOLE_LENGTH = 1000.0
-DIPOLE_BY = 0.01
+DIPOLE_BY = 0.5
 DIPOLE_DT = 1e-10
 DIPOLE_MAX_STEPS = 500
 DIPOLE_MAX_STEPS_CONV = 150
@@ -42,7 +42,7 @@ MOCK_GAMMA_INIT = np.array([1.0], dtype=np.float64)
 MOCK_CHARGES = np.array([-1], dtype=np.int8)
 
 # Visualization beam
-VIS_BEAM_N = 100
+VIS_BEAM_N = 1000
 VIS_BEAM_POS_SIGMA = 0.15
 VIS_BEAM_VEL_SIGMA_MOCK = 1.5
 VIS_BEAM_VEL_SIGMA_REAL = 1.5e6
