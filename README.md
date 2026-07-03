@@ -3,8 +3,6 @@
 ### A framework for simulating antimatter production, transport, and optimization.
 Janus is a computational framework for modeling the antimatter pipeline, integrating Geant4-based particle production, deterministic charged-particle transport, and hierarchical validation, with ongoing development toward beamline optimization, cooling, and particle trapping.<br>
 
-Janus follows a validation-first development philosophy: every numerical method and physical model is independently verified before being incorporated into larger transport systems or optimization studies.
-
 ---
 
 ## Bombardment of a Tungsten cylinder with protons accelerated to 26 GeV
