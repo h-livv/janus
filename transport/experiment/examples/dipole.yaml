@@ -13,7 +13,7 @@ particle_source:
 lattice:
   z_start: 0.0
   elements:
-    - {type: dipole, length: 1000.0, by: 0.5, aperture: 100.0}
+    - {type: dipole, length: 1000.0, by: 0.5, aperture: 10.0}
 
 numerical:
   dt: 1.0e-10
@@ -25,4 +25,4 @@ numerical:
 validation:
   pass_criteria: all_must_pass
 
-outputs: {report: true, json: true, csv: true, manifest: true, plots: true, visualization: false}
+outputs: {report: true, json: true, csv: true, manifest: true, plots: true, visualization: true}

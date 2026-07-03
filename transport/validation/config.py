@@ -48,5 +48,6 @@ class OutputConfig:
     emit_csv: bool = True
     emit_manifest: bool = True
     emit_plots: bool = True
+    visualization: bool = False
     output_dir: Optional[str] = None
     pass_criteria: PassCriteria = PassCriteria.ALL_MUST_PASS

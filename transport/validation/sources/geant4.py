@@ -9,13 +9,14 @@ from transport.validation.sources.base import ParticleBatch, ParticleSource
 class Geant4ParticleSource(ParticleSource):
     def __init__(self, charge_filter=None, particle_index=0, outputs_dir="runs",
                  target_filename="simulation.root", species="antiproton",
-                 momentum_slice=None):
+                 momentum_slice=None, n_particles=1):
         self.charge_filter = charge_filter
         self.particle_index = particle_index
         self.outputs_dir = outputs_dir
         self.target_filename = target_filename
         self.species = species
         self.momentum_slice = momentum_slice
+        self.n_particles = int(n_particles)
 
     def generate(self) -> ParticleBatch:
         from transport.io.data_io import get_latest_run_file, extract_cern_ad_seeds
@@ -39,23 +40,30 @@ class Geant4ParticleSource(ParticleSource):
             mom = np.linalg.norm(V, axis=1) * gamma  # approximate; data_io already filters
             mask = mask & (mom >= p_min) & (mom <= p_max)
 
-        idx = self.particle_index
-        if self.charge_filter == "antiproton":
-            idx = np.where(mask)[0][0]
+        indices = np.where(mask)[0]
+        if len(indices) == 0:
+            raise ValueError("No particles matched Geant4 source filters")
 
-        R_init = R[idx:idx + 1].astype(np.float64)
-        V_init = V[idx:idx + 1].astype(np.float64)
-        gamma_init = gamma[idx:idx + 1].astype(np.float64)
-        charges_init = charges[idx:idx + 1]
+        n = min(self.n_particles, len(indices))
+        if n == 1:
+            pick = indices[self.particle_index] if self.particle_index < len(indices) else indices[0]
+            sel = np.array([pick])
+        else:
+            sel = indices[:n]
+
+        R_init = R[sel].astype(np.float64)
+        V_init = V[sel].astype(np.float64)
+        gamma_init = gamma[sel].astype(np.float64)
+        charges_init = charges[sel]
         mass_kg = mass_of(self.species)
 
         return ParticleBatch(
             R=R_init, V=V_init, gamma=gamma_init, charges=charges_init,
-            mass=np.full(1, mass_kg, dtype=np.float64),
+            mass=np.full(len(sel), mass_kg, dtype=np.float64),
             species=self.species,
             metadata={
                 "source_type": "geant4",
-                "n_particles": 1,
+                "n_particles": len(sel),
                 "root_file": str(latest_file),
                 "charge_filter": self.charge_filter,
                 "species": self.species,

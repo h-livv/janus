@@ -21,9 +21,16 @@ def main():
     args = parser.parse_args()
 
     from transport.experiment.loader import load_experiment
+    experiment = load_experiment(args.experiment)
+
+    if experiment.outputs.visualization:
+        from transport.pipeline import run_visualization
+        print(f"[Main] Visualization enabled for: {experiment.name} ({args.experiment})")
+        run_visualization(experiment)
+        return
+
     from transport.pipeline import run_experiment
 
-    experiment = load_experiment(args.experiment)
     print(f"[Main] Running experiment: {experiment.name} ({args.experiment})")
     passed, run_outputs_dir = run_experiment(experiment)
 

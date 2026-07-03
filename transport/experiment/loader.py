@@ -102,6 +102,7 @@ def parse_experiment_dict(data: dict) -> Experiment:
         emit_csv=out.get("csv", True),
         emit_manifest=out.get("manifest", True),
         emit_plots=out.get("plots", True),
+        visualization=out.get("visualization", False),
         output_dir=exp.get("output_dir"),
         pass_criteria=pass_criteria,
     )

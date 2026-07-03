@@ -36,6 +36,7 @@ def build_particle_source(spec):
             charge_filter=spec.charge_filter,
             species=species,
             momentum_slice=spec.momentum_slice,
+            n_particles=spec.n_particles,
         )
 
     if source_type == "gaussian_beam":
@@ -99,6 +100,13 @@ def experiment_to_simulation_config(experiment: Experiment) -> SimulationConfig:
 
 
 def validation_case_from_experiment(experiment: Experiment):
+    ps = experiment.particle_source
+    if ps.type.lower() == "geant4" and ps.n_particles != 1:
+        raise ValueError(
+            "Geant4 validation and convergence require n_particles: 1. "
+            "Set n_particles to 1 for validation, or enable outputs.visualization "
+            "to visualize multiple Geant4 particles."
+        )
     initialize_registries()
     config = experiment_to_simulation_config(experiment)
     case = case_for_config(config)
