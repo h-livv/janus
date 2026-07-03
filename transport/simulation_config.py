@@ -41,15 +41,14 @@ def load_geant4_initial_conditions(case_type):
             mask = all_charges == 1
         if not np.any(mask):
             raise ValueError("No charged particles found in simulation.root")
-        idx = int(np.where(mask)[0][0])
     else:
-        idx = 0
+        mask = np.ones(len(all_charges), dtype=bool)
 
     return (
-        R[idx:idx + 1].astype(np.float64),
-        V[idx:idx + 1].astype(np.float64),
-        gamma[idx:idx + 1].astype(np.float64),
-        all_charges[idx:idx + 1],
+        R[mask].astype(np.float64),
+        V[mask].astype(np.float64),
+        gamma[mask].astype(np.float64),
+        all_charges[mask],
     )
 
 

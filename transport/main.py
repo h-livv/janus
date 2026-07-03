@@ -94,16 +94,23 @@ def main():
         from transport.simulation_config import expand_beam
 
         config = build_config(ELEMENT_TYPE.lower())
-        vel_sigma = VIS_BEAM_VEL_SIGMA_MOCK if USE_MOCK_DATA else VIS_BEAM_VEL_SIGMA_REAL
-        R_beam, V_beam, gamma_beam, charges_beam = expand_beam(
-            config,
-            VIS_BEAM_N,
-            VIS_BEAM_POS_SIGMA,
-            vel_sigma,
-            VIS_BEAM_RNG_SEED,
-        )
+        if len(config.R_init) == 1:
+            vel_sigma = VIS_BEAM_VEL_SIGMA_MOCK if USE_MOCK_DATA else VIS_BEAM_VEL_SIGMA_REAL
+            R_beam, V_beam, gamma_beam, charges_beam = expand_beam(
+                config,
+                VIS_BEAM_N,
+                VIS_BEAM_POS_SIGMA,
+                vel_sigma,
+                VIS_BEAM_RNG_SEED,
+            )
+        else:
+            R_beam = config.R_init.copy()
+            V_beam = config.V_init.copy()
+            gamma_beam = config.gamma_init.copy()
+            charges_beam = config.charges.copy()
+        N = len(R_beam)
 
-        buffer_bytes = 2 * VIS_BEAM_N * 3 * 4
+        buffer_bytes = 2 * N * 3 * 4
         shm = SharedMemory(create=True, size=buffer_bytes)
         shared_mem_name = shm.name
         sync_queue = mp.Queue(maxsize=5)
@@ -116,7 +123,7 @@ def main():
         )
         renderer_proc = mp.Process(
             target=run_renderer,
-            args=(shared_mem_name, sync_queue, stop_event, VIS_BEAM_N, VIS_TRAIL_LENGTH,
+            args=(shared_mem_name, sync_queue, stop_event, N, VIS_TRAIL_LENGTH,
                   config.lattice, charges_beam, None),
         )
 
