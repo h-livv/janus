@@ -1,6 +1,9 @@
 # Janus
 
-A stochastic framework for simulating and optimizing particle generation, with a focus on antimatter systems. <br>
+### A framework for simulating antimatter production, transport, and optimization.
+Janus is a computational framework for modeling the antimatter pipeline, integrating Geant4-based particle production, deterministic charged-particle transport, and hierarchical validation, with ongoing development toward beamline optimization, cooling, and particle trapping.<br>
+
+Janus follows a validation-first development philosophy: every numerical method and physical model is independently verified before being incorporated into larger transport systems or optimization studies.
 
 ---
 
@@ -10,15 +13,15 @@ A stochastic framework for simulating and optimizing particle generation, with a
 
 <br>
 
-
 ---
 
 ## Documentation
 
+- [Installation](docs/geant4_installation) - Building Geant4 and setting up Janus
 - [Physics](docs/PHYSICS.md) - Physics, architecture and philosophy behind the project
 - [Collision Validation](docs/collision_validation.md) - Validation methodology and benchmark results for the collision engine
 - [Transport Validation](docs/transport_validation.md) - Validation studies for the transport solver and lattice elements
-- [Installation](docs/geant4_installation) - Building Geant4 and setting up Janus
+
 
 ---
 
@@ -39,7 +42,7 @@ A stochastic framework for simulating and optimizing particle generation, with a
 
 Detailed validation study with outputs is available in [docs/collision_validation.md](docs/collision_validation.md)<br>
 
-The validation framework verifies that the Janus physics engine satisfies conservation laws, statistical benchmarks, and phenomenological observables, providing confidence in generated datasets before transport and optimization studies.
+The validation framework verifies conservation laws, statistical benchmarks, and phenomenological observables before generated datasets are propagated into downstream transport and optimization studies.
 
 ---
 
@@ -52,6 +55,11 @@ Validation currently includes:
 - Analytical validation of individual lattice elements
 - Boris integrator conservation tests
 - Timestep convergence studies
+
+Planned validation includes:
+
+- Composite lattice validation
+- Beam validation
 
 Optimization studies are performed only after the underlying numerical methods and physical models have been independently validated.
 
@@ -75,13 +83,14 @@ Transport validation studies are continuously updated in [docs/transport_validat
 - Species and momentum filtering pipelines
 
 ### Transport Pipeline
-- Modular and physics-agnostic lattice structure
-  * Drift spaces
-  * Dipoles
-  * Quadrupoles
-  * Extensible beamline elements
-- Validated Drift and Dipole elements
-- Validation and convergence studies
+- Relativistic Boris particle pusher
+- Modular lattice framework
+    - Drift spaces
+    - Dipoles
+    - Extensible beamline elements
+- Hierarchical transport validation
+- Analytical verification of lattice elements
+- Second-order convergence verification
 
 ---
 
@@ -90,35 +99,32 @@ Transport validation studies are continuously updated in [docs/transport_validat
 
 ```
 janus/
-├── README.md                # Project documentation
+├── docs/                         # Physics, validation, and setup documentation
 │
-├── docs/                    # Documentation directory
+├── engine/                       # C++ Geant4 collision engine
+│   ├── include/, src/            # Detector geometry, physics, event generation
+│   ├── macros/                   # Geant4 macro scripts
+│   └── janus.cc                  # Simulation entry point
 │
-├── engine/                  # C++ Geant4 Simulation Engine
-│   ├── CMakeLists.txt       # CMake configuration
-│   ├── build/               # Build directory containing compiled binaries
-│   ├── include/             # C++ header files (.hh)
-│   ├── janus.cc             # Main entry point for the simulation
-│   ├── macros/              # Geant4 macro scripts (.mac)
-│   └── src/                 # C++ source code (.cc)
+├── collision/                    # Collision run orchestration
+│   ├── run.py, run_batches.py    # Single and batch execution
+│   ├── config.json               # Default run configuration
+│   └── dependencies/             # Pipeline utilities and Geant4 interface
 │
-├── collision/               # Collision simulation runner & pipeline
-│   ├── config.json          # Default configuration for collision runs
-│   ├── run.py               # Script to run a single collision configuration
-│   ├── run_batches.py       # Script to execute multiple batches consecutively
-│   └── dependencies/        # Collision pipeline logic and interface utilities
+├── runs/                         # Geant4 output (ROOT datasets)
 │
-├── transport/               # Transport simulation and validation
-│   ├── main.py              # Main file to run the simulation
-│   ├── io                   # Data management
-│   ├── physics              # Solver and timestepping
-│   ├── lattice              # The lattice
-│   ├── visualization        # Visualization interface
-│   └── validation           # Transport solver, lattice, diagnostics, and viewport logic
+├── transport/                    # Deterministic transport framework
+│   ├── main.py                   # Experiment runner (YAML → validate or visualize)
+│   ├── experiment/               # Experiment schema, loader, example YAMLs
+│   ├── io/                       # ROOT I/O and seed extraction
+│   ├── physics/                  # Boris integrator, particle data
+│   ├── lattice/                  # Beamline elements and element registry
+│   ├── validation/               # Validation engine, cases, metrics, reporting
+│   └── visualization/            # VisPy 3D viewport
 │
-└── validation               # Automated test and validation scripts
-    ├── physical_validation.py
-    └── validate.py
+└── validation/                   # Collision-stage validation scripts
+    ├── validate.py               # Conservation and sanity checks
+    └── physical_validation.py    # Diagnostic plots and benchmarks
 ```
 
 
@@ -126,22 +132,28 @@ janus/
 
 ## Roadmap
 
-- Validation
-  * Single-structure validation
-  * Composite lattice validation
-  * Beam analysis and validation
+### Validation
 
-- Optimization
-  * Geant4 particle production
-  * Transport elements
-  * Beam optics
+- Composite lattice validation
+- Beam validation
 
-- Higher-level transport
-  * Deceleration
-  * Cooling
-  * Trapping
+### Transport Physics
 
-- Higher-level and global optimization
+- Quadrupoles
+- Composite beamlines
+- Solenoids
+- Magnetic horns
+- Deceleration
+- Cooling
+- Trapping
+
+### Optimization
+
+- Geant4 production
+- Beam transport
+- Beam optics
+- End-to-end pipeline optimization
+
 ---
 
 ## Acknowledgements
