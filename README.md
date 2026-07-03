@@ -82,6 +82,7 @@ Transport validation studies are continuously updated in [docs/transport_validat
   * Extensible beamline elements
 - Validated Drift and Dipole elements
 - Validation and convergence studies
+- YAML-driven experiment configuration (`transport/experiment/`)
 
 ---
 
@@ -109,7 +110,8 @@ janus/
 │   └── dependencies/        # Collision pipeline logic and interface utilities
 │
 ├── transport/               # Transport simulation and validation
-│   ├── main.py              # Main file to run the simulation
+│   ├── main.py              # YAML experiment runner
+│   ├── experiment/          # Experiment schema, loader, and example YAMLs
 │   ├── io                   # Data management
 │   ├── physics              # Solver and timestepping
 │   ├── lattice              # The lattice

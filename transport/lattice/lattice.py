@@ -14,6 +14,20 @@ class Element:
         """
         return np.zeros_like(x), np.zeros_like(y), np.zeros_like(z)
 
+    def em_field(self, x, y, z):
+        """
+        Returns ((Ex, Ey, Ez), (Bx, By, Bz)) at the supplied coordinates.
+        Default: E = 0, B from field().
+        """
+        Bx, By, Bz = self.field(x, y, z)
+        if isinstance(x, np.ndarray):
+            Ex = np.zeros_like(x)
+            Ey = np.zeros_like(y)
+            Ez = np.zeros_like(z)
+        else:
+            Ex, Ey, Ez = 0.0, 0.0, 0.0
+        return (Ex, Ey, Ez), (Bx, By, Bz)
+
     def inside_aperture(self, x, y, z):
         """
         Returns a boolean array indicating if particles are inside the aperture.
@@ -155,6 +169,37 @@ class SimpleLattice:
             if el:
                 return el.field(x, y, z)
             return 0.0, 0.0, 0.0
+
+    def get_em_field(self, x, y, z):
+        """
+        Queries the electric and magnetic fields for coordinates.
+        Returns ((Ex, Ey, Ez), (Bx, By, Bz)).
+        """
+        if isinstance(x, np.ndarray):
+            Ex = np.zeros_like(x)
+            Ey = np.zeros_like(y)
+            Ez = np.zeros_like(z)
+            Bx = np.zeros_like(x)
+            By = np.zeros_like(y)
+            Bz = np.zeros_like(z)
+            for el in self.elements:
+                mask = (z >= el.z_start) & (z <= el.z_end)
+                if np.any(mask):
+                    (el_ex, el_ey, el_ez), (el_bx, el_by, el_bz) = el.em_field(
+                        x[mask], y[mask], z[mask]
+                    )
+                    Ex[mask] = el_ex
+                    Ey[mask] = el_ey
+                    Ez[mask] = el_ez
+                    Bx[mask] = el_bx
+                    By[mask] = el_by
+                    Bz[mask] = el_bz
+            return (Ex, Ey, Ez), (Bx, By, Bz)
+        else:
+            el = self.get_element_at_z(z)
+            if el:
+                return el.em_field(x, y, z)
+            return (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
 
     def inside_aperture(self, x, y, z):
         """

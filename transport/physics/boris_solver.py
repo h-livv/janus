@@ -23,7 +23,7 @@ def positions_for_render(R, alive_mask):
     return out
 
 
-def boris_velocity_push(R, V, gamma, dt, alive_mask, lattice, charges=None):
+def boris_velocity_push(R, V, gamma, dt, alive_mask, lattice, charges=None, mass=None):
     """
     Relativistic Boris velocity update only; R is used for field evaluation.
     """
@@ -33,34 +33,38 @@ def boris_velocity_push(R, V, gamma, dt, alive_mask, lattice, charges=None):
     V_alive = V[alive_mask]
     R_alive = R[alive_mask]
 
-    Bx, By, Bz = lattice.get_field(R_alive[:, 0], R_alive[:, 1], R_alive[:, 2])
+    (Ex, Ey, Ez), (Bx, By, Bz) = lattice.get_em_field(
+        R_alive[:, 0], R_alive[:, 1], R_alive[:, 2]
+    )
     B_alive = np.column_stack((Bx, By, Bz))
+    E_alive = np.column_stack((Ex, Ey, Ez))
 
     if charges is None:
         q = np.full(len(R_alive), -E_CHARGE)
     else:
         q = charges[alive_mask].astype(np.float64) * E_CHARGE
 
-    # E = 0 (structured for future extensions); PlasmaPy RelativisticBorisIntegrator
-    # (Birdsall & Langdon 2004, pp. 58-63), velocity push only.
-    E_alive = np.zeros_like(V_alive)
+    if mass is None:
+        m_alive = np.full(len(R_alive), M_P_KG)
+    else:
+        m_alive = mass[alive_mask].astype(np.float64)
 
     v_sq = np.sum(V_alive**2, axis=1, keepdims=True)
     gamma_v = 1.0 / np.sqrt(1.0 - v_sq / C_LIGHT**2)
     uvel = V_alive * gamma_v
 
-    uvel_minus = uvel + q[:, np.newaxis] * E_alive * dt / (2.0 * M_P_KG)
+    uvel_minus = uvel + q[:, np.newaxis] * E_alive * dt / (2.0 * m_alive[:, np.newaxis])
 
     uvel_minus_sq = np.sum(uvel_minus**2, axis=1, keepdims=True)
     gamma_1 = np.sqrt(1.0 + uvel_minus_sq / C_LIGHT**2)
 
-    t = q[:, np.newaxis] * B_alive * dt / (2.0 * gamma_1 * M_P_KG)
+    t = q[:, np.newaxis] * B_alive * dt / (2.0 * gamma_1 * m_alive[:, np.newaxis])
     t_sq = np.sum(t**2, axis=1, keepdims=True)
     s = 2.0 * t / (1.0 + t_sq)
 
     uvel_prime = uvel_minus + np.cross(uvel_minus, t)
     uvel_plus = uvel_minus + np.cross(uvel_prime, s)
-    uvel_new = uvel_plus + q[:, np.newaxis] * E_alive * dt / (2.0 * M_P_KG)
+    uvel_new = uvel_plus + q[:, np.newaxis] * E_alive * dt / (2.0 * m_alive[:, np.newaxis])
 
     uvel_new_sq = np.sum(uvel_new**2, axis=1, keepdims=True)
     gamma_new = np.sqrt(1.0 + uvel_new_sq / C_LIGHT**2)
@@ -80,7 +84,7 @@ def boris_velocity_push(R, V, gamma, dt, alive_mask, lattice, charges=None):
     return V, gamma
 
 
-def relativistic_boris_step(R, V, gamma, dt, alive_mask, lattice, charges=None):
+def relativistic_boris_step(R, V, gamma, dt, alive_mask, lattice, charges=None, mass=None):
     """
     Perform a staggered Leapfrog integration step using the relativistic Boris solver.
     Input R is at t^n, and V is at t^{n-1/2}.
@@ -90,7 +94,7 @@ def relativistic_boris_step(R, V, gamma, dt, alive_mask, lattice, charges=None):
     if not np.any(alive_mask):
         return R, V, gamma
 
-    V, gamma = boris_velocity_push(R, V, gamma, dt, alive_mask, lattice, charges)
+    V, gamma = boris_velocity_push(R, V, gamma, dt, alive_mask, lattice, charges, mass)
 
     V_alive = V[alive_mask]
     R_alive = R[alive_mask]
@@ -99,13 +103,20 @@ def relativistic_boris_step(R, V, gamma, dt, alive_mask, lattice, charges=None):
 
     return R, V, gamma
 
-def track_particles(R_init, V_init, gamma_init, charges, lattice, dt, max_steps):
+def track_particles(R_init, V_init, gamma_init, charges, lattice, dt, max_steps, mass=None):
     """
     Track a set of particles through a lattice using a staggered Leapfrog Boris scheme.
     """
     N = len(R_init)
     R = R_init.copy()
     V = V_init.copy()
+
+    if mass is None:
+        mass_arr = np.full(N, M_P_KG)
+    else:
+        mass_arr = np.asarray(mass, dtype=np.float64)
+        if mass_arr.ndim == 0:
+            mass_arr = np.full(N, float(mass_arr))
     
     # Compute self-consistent relativistic gamma from V to avoid input rounding mismatches
     v_mag_sq = np.sum(V**2, axis=1)
@@ -113,8 +124,10 @@ def track_particles(R_init, V_init, gamma_init, charges, lattice, dt, max_steps)
     alive_mask = np.ones(N, dtype=bool)
 
     # Stagger initial velocity backward by dt/2 to obtain V^{-1/2}
-    V, gamma = boris_velocity_push(R, V, gamma, -dt / 2.0, alive_mask, lattice, charges)
+    V, gamma = boris_velocity_push(R, V, gamma, -dt / 2.0, alive_mask, lattice, charges, mass_arr)
     alive_mask = apply_aperture_losses(R, alive_mask, lattice)
+
+    mass_mev = mass_arr * (M_P_MEV / M_P_KG)
 
     diagnostics = {
         "step": [],
@@ -138,12 +151,12 @@ def track_particles(R_init, V_init, gamma_init, charges, lattice, dt, max_steps)
         gamma_old = gamma.copy()
 
         # Perform the Boris push: updates R^n -> R^{n+1} and V^{n-1/2} -> V^{n+1/2}
-        R, V, gamma = relativistic_boris_step(R, V, gamma, dt, alive_mask, lattice, charges)
+        R, V, gamma = relativistic_boris_step(R, V, gamma, dt, alive_mask, lattice, charges, mass_arr)
 
         # Synchronize diagnostics to integer step t^n via averaging
         V_sync = (V_old + V) / 2.0
         gamma_sync = (gamma_old + gamma) / 2.0
-        mom_sync = gamma_sync[:, np.newaxis] * M_P_MEV * (V_sync / C_LIGHT)
+        mom_sync = gamma_sync[:, np.newaxis] * mass_mev[:, np.newaxis] * (V_sync / C_LIGHT)
 
         Bx, By, Bz = lattice.get_field(R_old[:, 0], R_old[:, 1], R_old[:, 2])
         fields = np.column_stack((Bx, By, Bz))
@@ -170,8 +183,8 @@ def track_particles(R_init, V_init, gamma_init, charges, lattice, dt, max_steps)
     # Unstagger final velocity to t^N
     V_final = V.copy()
     R_temp = R.copy()
-    _, V_final, gamma_final = relativistic_boris_step(R_temp, V_final, gamma, dt / 2.0, alive_mask, lattice, charges)
-    mom_final = gamma_final[:, np.newaxis] * M_P_MEV * (V_final / C_LIGHT)
+    _, V_final, gamma_final = relativistic_boris_step(R_temp, V_final, gamma, dt / 2.0, alive_mask, lattice, charges, mass_arr)
+    mom_final = gamma_final[:, np.newaxis] * mass_mev[:, np.newaxis] * (V_final / C_LIGHT)
 
     Bx, By, Bz = lattice.get_field(R[:, 0], R[:, 1], R[:, 2])
     fields = np.column_stack((Bx, By, Bz))

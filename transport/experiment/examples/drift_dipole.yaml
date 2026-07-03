@@ -1,0 +1,31 @@
+experiment:
+  name: drift_dipole_level2
+  level: 2
+  case: drift_dipole
+  output_dir: transport/validation/outputs
+
+particle_source:
+  type: mock
+  species: proton
+  position: [-4.5, 0.0, 25.0]
+  velocity: [0.0, 0.0, 5000000.0]
+  gamma: 1.0
+  n_particles: 1
+
+lattice:
+  z_start: 0.0
+  elements:
+    - {type: drift, length: 5.0, aperture: 0.1}
+    - {type: dipole, length: 5.0, by: 1.0, aperture: 0.1}
+
+numerical:
+  dt: 1.0e-10
+  max_steps: 1000
+  max_steps_conv: 300
+  convergence: {enabled: false, mode: analytical, num_points: 8, refinement_ratio: 2.0}
+  solver: boris
+
+validation:
+  pass_criteria: all_must_pass
+
+outputs: {report: true, json: true, csv: true, manifest: true, plots: true, visualization: false}
