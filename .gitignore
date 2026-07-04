@@ -18,6 +18,8 @@ stitch_dataset.py
 
 validation_outputs/
 
+.cursor/
+
 outputs/
 
 *.hdf5
@@ -41,6 +43,8 @@ Makefile
 cmake_install.cmake
 
 compile_commands.json
+
+__pycache__/
 
 __pycache__
 
