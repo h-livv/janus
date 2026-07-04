@@ -7,7 +7,7 @@ from transport.validation.sources.base import ParticleBatch, ParticleSource
 
 
 class Geant4ParticleSource(ParticleSource):
-    def __init__(self, charge_filter=None, particle_index=0, outputs_dir="runs",
+    def __init__(self, charge_filter=None, particle_index=0, outputs_dir="interactions/runs",
                  target_filename="simulation.root", species="antiproton",
                  momentum_slice=None, n_particles=1):
         self.charge_filter = charge_filter

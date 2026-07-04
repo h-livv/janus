@@ -28,7 +28,7 @@ def load_geant4_initial_conditions(charge_filter="any", momentum_slice=None):
     from transport.io.data_io import extract_cern_ad_seeds, get_latest_run_file
 
     latest_file = get_latest_run_file(
-        outputs_dir_name="runs", target_filename="simulation.root"
+        outputs_dir_name="interactions/runs", target_filename="simulation.root"
     )
     R, V, gamma, all_charges = extract_cern_ad_seeds([latest_file])
 

@@ -27,7 +27,7 @@ Janus follows a validation-first development philosophy: every numerical method 
 
 ## Validation Studies
 
-`validation/` automatically verifies the physical accuracy of the generated outputs before the batch moves further down the pipeline.
+`interactions/validation/` automatically verifies the physical accuracy of the generated outputs before the batch moves further down the pipeline.
 
 - **`validate.py`:** Evaluates event-by-event fundamental physics laws.
   * Kinematic conservation (Energy/Momentum)
@@ -106,12 +106,14 @@ janus/
 │   ├── macros/                   # Geant4 macro scripts
 │   └── janus.cc                  # Simulation entry point
 │
-├── collision/                    # Collision run orchestration
+├── interactions/                 # Interaction run orchestration
 │   ├── run.py, run_batches.py    # Single and batch execution
 │   ├── config.json               # Default run configuration
+│   ├── runs/                     # Geant4 output (ROOT datasets)
+│   ├── validation/               # Collision-stage validation scripts
+│   │   ├── validate.py           # Conservation and sanity checks
+│   │   └── physical_validation.py # Diagnostic plots and benchmarks
 │   └── dependencies/             # Pipeline utilities and Geant4 interface
-│
-├── runs/                         # Geant4 output (ROOT datasets)
 │
 ├── transport/                    # Deterministic transport framework
 │   ├── main.py                   # Experiment runner (YAML → validate or visualize)
@@ -121,10 +123,6 @@ janus/
 │   ├── lattice/                  # Beamline elements and element registry
 │   ├── validation/               # Validation engine, cases, metrics, reporting
 │   └── visualization/            # VisPy 3D viewport
-│
-└── validation/                   # Collision-stage validation scripts
-    ├── validate.py               # Conservation and sanity checks
-    └── physical_validation.py    # Diagnostic plots and benchmarks
 ```
 
 
