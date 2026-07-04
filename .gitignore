@@ -16,6 +16,8 @@ logs/
 
 stitch_dataset.py
 
+transport/validaion/outputs/
+
 validation_outputs/
 
 .cursor/
