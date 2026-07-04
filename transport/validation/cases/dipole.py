@@ -1,206 +1,137 @@
+"""Declarative dipole validation case (Level 1)."""
+
 import numpy as np
-from transport.validation.base import ValidationCase
-from transport.lattice.lattice import SimpleLattice, Dipole
 
-from transport.io.data_io import get_latest_run_file, extract_cern_ad_seeds
+from transport.lattice.lattice import Dipole, SimpleLattice
+from transport.validation.case import ValidationCase
+from transport.validation.config import ConvergenceConfig, NumericalConfig, OutputConfig, Tolerance
+from transport.validation.metrics.conservation import EnergyConservationMetric, MomentumConservationMetric
+from transport.validation.metrics.trajectory import BendAngleErrorMetric, CyclotronRadiusErrorMetric
+from transport.validation.references.analytical import DipoleAnalyticalReference
+from transport.validation.sources.single import SingleParticleSource
 
-# Constants
-C_LIGHT   = 299792458.0
-E_CHARGE  = 1.602176634e-19
-M_P_KG    = 1.67262192369e-27
-M_P_MEV   = 938.2720813
+C_LIGHT = 299792458.0
+E_CHARGE = 1.602176634e-19
+M_P_KG = 1.67262192369e-27
 
-class DipoleValidation(ValidationCase):
-    def __init__(self):
-        super().__init__("DipoleValidation", dt=1e-10, max_steps=500, max_steps_conv=150)
-        # Initialize placeholders, updated dynamically in initial_particles
-        self.p_gevc = 3.5752
-        self.P_mevc = self.p_gevc * 1000.0
-        self.E_total = np.sqrt(self.P_mevc**2 + M_P_MEV**2)
-        self.gamma = self.E_total / M_P_MEV
-        self.v_mag = (self.P_mevc * C_LIGHT) / self.E_total
-        self.B_rho = (self.P_mevc * 1e6) / C_LIGHT
-        self.aperture_radius = None
-        self.lattice = None
 
-    def _dipole_element(self):
-        if self.lattice is not None:
-            for el in self.lattice.elements:
-                if hasattr(el, "By"):
-                    return el
-        return None
+def _dipole_context(config):
+    lattice = config.lattice
+    V_init = config.V_init
+    charges = config.charges
+    v_mag = float(np.linalg.norm(V_init[0]))
+    gamma = float(1.0 / np.sqrt(1.0 - (v_mag / C_LIGHT) ** 2))
+    z_start = lattice.z_start
+    dipole = lattice.elements[0]
+    dipole_length = dipole.L
+    dipole_by = dipole.By
+    charge = int(charges[0])
+    m_kg = float(config.mass[0]) if getattr(config, "mass", None) is not None else M_P_KG
 
-    def _dipole_length(self):
-        el = self._dipole_element()
-        return el.L if el is not None else 5.0
+    if config.use_mock_data:
+        theta_entry = 0.0
+        B_rho = (1.0 * m_kg * v_mag) / E_CHARGE
+    else:
+        v_perp = float(np.sqrt(V_init[0, 0] ** 2 + V_init[0, 2] ** 2))
+        B_rho = gamma * m_kg * v_perp / E_CHARGE
+        theta_entry = float(np.arctan2(V_init[0, 0], V_init[0, 2]))
 
-    def _dipole_by(self):
-        el = self._dipole_element()
-        return el.By if el is not None else 1.0
+    ref = DipoleAnalyticalReference(
+        z_start=z_start, dipole_length=dipole_length, dipole_by=dipole_by,
+        B_rho=B_rho, theta_entry=theta_entry, charge=charge, gamma=gamma,
+    )
+    return ref, {
+        "z_start": z_start,
+        "dipole_length": dipole_length,
+        "dipole_by": dipole_by,
+        "B_rho": B_rho,
+        "theta_entry": theta_entry,
+        "charge": charge,
+        "gamma": gamma,
+    }
 
-    def get_custom_error_data(self, diagnostics, analytical):
-        t = diagnostics["time"]
-        pos = diagnostics["position"][:, 0]
-        alive = diagnostics["alive"][:, 0]
-        
-        mask = (pos[:, 2] > self.z_start) & (pos[:, 2] <= self.z_start + self._dipole_length()) & alive
-        x_track = pos[mask, 0]
-        z_track = pos[mask, 2]
-        
-        curves = []
-        if len(x_track) > 3:
-            R_sim = self.fit_circle(x_track, z_track)
-            A = np.column_stack((2*x_track, 2*z_track, np.ones_like(x_track)))
-            Y = x_track**2 + z_track**2
-            w, _, _, _ = np.linalg.lstsq(A, Y, rcond=None)
-            Xc, Zc = w[0], w[1]
-            radial_dist = np.sqrt((pos[:, 0] - Xc)**2 + (pos[:, 2] - Zc)**2)
-            r_err = np.abs(radial_dist - R_sim)
-            curves.append({"x": t[mask] * 1e9, "y": r_err[mask], "label": "Radial Deviation from Circle Fit", "color": "purple"})
-            
-        return {
-            "title": "Dipole Orbit Circular Fit Deviations",
-            "ylabel": "Radial Deviation (m)",
-            "xlabel": "Time (ns)",
-            "curves": curves
-        }
 
-    def build_lattice(self):
-        # We define a long dipole for Test 2 (cyclotron radius) 
-        # and a shorter dipole for Test 6 (bend angle).
-        # We can dynamically change the dipole parameters or return a standard one.
-        # Let's use a 5.0m dipole with By = 1.0 T.
-        # This will bend the antiproton by a measurable angle.
-        return SimpleLattice(
-            [Dipole(length=5.0, By=1.0, aperture_radius=self.aperture_radius)],
-            z_start=self.z_start,
+def build_dipole_case(
+    lattice=None,
+    R_init=None,
+    V_init=None,
+    gamma_init=None,
+    charges=None,
+    dt=1e-10,
+    max_steps=500,
+    max_steps_conv=150,
+    use_mock_data=True,
+    z_start=0.0,
+    dipole_length=5.0,
+    dipole_by=1.0,
+    aperture_radius=None,
+    config_context=None,
+):
+    if lattice is None:
+        lattice = SimpleLattice(
+            [Dipole(dipole_length, dipole_by, aperture_radius=aperture_radius)],
+            z_start=z_start,
         )
 
-    def initial_particles(self):
-        latest_file = get_latest_run_file(outputs_dir_name="runs", target_filename="simulation.root")
-        R, V, gamma, charges = extract_cern_ad_seeds([latest_file])
-        
-        # Select first antiproton (or first particle if no antiprotons)
-        mask = (charges == -1)
-        if not np.any(mask):
-            mask = (charges == 1)
-        if not np.any(mask):
-            raise ValueError("No charged particles found in simulation.root")
-            
-        idx = np.where(mask)[0][0]
-        
-        R_init = R[idx:idx+1].astype(np.float64)
-        V_init = V[idx:idx+1].astype(np.float64)
-        gamma_init = gamma[idx:idx+1].astype(np.float64)
-        charges_init = charges[idx:idx+1]
-        
-        self.z_start = R_init[0, 2]
-        self.v_mag = np.linalg.norm(V_init[0])
-        
-        # Recompute gamma perfectly consistently with V_init to avoid precision plateaus
-        self.gamma = 1.0 / np.sqrt(1.0 - (self.v_mag / C_LIGHT)**2)
-        
-        v_perp = np.sqrt(V_init[0, 0]**2 + V_init[0, 2]**2)
-        self.B_rho = self.gamma * M_P_KG * v_perp / E_CHARGE
-        
-        self.theta_entry = np.arctan2(V_init[0, 0], V_init[0, 2])
-        self.charge = charges_init[0]
-        
-        return R_init, V_init, gamma_init, charges_init
+    class _Config:
+        pass
 
-    def analytical_position(self, t, R_init, V_init, charges):
-        omega_c = (charges[0] * E_CHARGE * self._dipole_by()) / (self.gamma * M_P_KG)
-        x0, y0, z0 = R_init[0]
-        vx0, vy0, vz0 = V_init[0]
-        
-        if abs(omega_c) < 1e-12:
-            return R_init + V_init * t
-            
-        x_t = x0 + (vx0 / omega_c) * np.sin(omega_c * t) - (vz0 / omega_c) * (1.0 - np.cos(omega_c * t))
-        y_t = y0 + vy0 * t
-        z_t = z0 + (vz0 / omega_c) * np.sin(omega_c * t) + (vx0 / omega_c) * (1.0 - np.cos(omega_c * t))
-        
-        return np.array([[x_t, y_t, z_t]])
+    cfg = _Config()
+    cfg.lattice = lattice
+    cfg.R_init = R_init
+    cfg.V_init = V_init
+    cfg.gamma_init = gamma_init
+    cfg.charges = charges
+    cfg.use_mock_data = use_mock_data
 
-    def analytical_solution(self, diagnostics):
-        # Cyclotron radius: R = B_rho / B
-        By = self._dipole_by()
-        R_analytical = self.B_rho / By
+    ref, meta = _dipole_context(cfg if config_context is None else config_context)
+    source = SingleParticleSource(R_init, V_init, gamma_init, charges)
 
-        # Bending angle: theta = asin(sin(theta_entry) - q * B * L / p_perp) - theta_entry
-        L = self._dipole_length()
-        arg = np.sin(self.theta_entry) - (self.charge * By * L / self.B_rho)
-        theta_exit = np.arcsin(arg)
-        theta_analytical = theta_exit - self.theta_entry
-        
-        return {
-            "cyclotron_radius": R_analytical,
-            "bend_angle": theta_analytical
-        }
+    ctx = config_context if config_context is not None else cfg
+    m_kg = float(ctx.mass[0]) if getattr(ctx, "mass", None) is not None else M_P_KG
 
-    def fit_circle(self, x, z):
-        """
-        Algebraic least-squares fit for a circle (x-Xc)^2 + (z-Zc)^2 = R^2
-        """
-        # Formulate as: A * w = Y
-        # where w = [Xc, Zc, C], C = R^2 - Xc^2 - Zc^2
-        # A = [2*x, 2*z, 1], Y = x^2 + z^2
-        A = np.column_stack((2*x, 2*z, np.ones_like(x)))
-        Y = x**2 + z**2
-        w, _, _, _ = np.linalg.lstsq(A, Y, rcond=None)
-        
-        Xc, Zc, C = w[0], w[1], w[2]
-        R = np.sqrt(C + Xc**2 + Zc**2)
-        return R
+    def analytical_position_fn(t, R_i, V_i, ch):
+        return ref.position_at_time(t, R_i, V_i, ch, mass_kg=m_kg)
 
-    def evaluate(self, diagnostics, analytical):
-        # 1. Extract trajectory
-        pos = diagnostics["position"][:, 0] # (n_steps, 3)
-        mom = diagnostics["momentum"][:, 0] # (n_steps, 3)
-        alive = diagnostics["alive"][:, 0]
-        
-        # Filter only when particle was inside the dipole (z_start <= z <= z_start + 5.0) and alive
-        z_start = self.z_start
-        z_end = self.z_start + self._dipole_length()
-        mask = (pos[:, 2] > z_start) & (pos[:, 2] <= z_end) & alive
-        x_track = pos[mask, 0]
-        z_track = pos[mask, 2]
-        
-        # 2. Fit cyclotron radius
-        if len(x_track) > 3:
-            R_sim = self.fit_circle(x_track, z_track)
-        else:
-            R_sim = 0.0
-            
-        R_err = abs(R_sim - analytical["cyclotron_radius"]) / analytical["cyclotron_radius"]
-        
-        # 3. Deflection angle at exit
-        # Find the last step where the particle was alive (right before it exited the dipole/pipe)
-        alive_idxs = np.where(alive)[0]
-        if len(alive_idxs) > 0:
-            last_alive_idx = alive_idxs[-1]
-            px_exit = mom[last_alive_idx, 0]
-            pz_exit = mom[last_alive_idx, 2]
-            theta_exit = np.arctan2(px_exit, pz_exit)
-            
-            px_entry = mom[0, 0]
-            pz_entry = mom[0, 2]
-            theta_entry = np.arctan2(px_entry, pz_entry)
-            
-            theta_sim = theta_exit - theta_entry
-        else:
-            theta_sim = 0.0
-            
-        # Bend angle error comparing magnitude of simulated bend vs analytical bend
-        theta_err = abs(abs(theta_sim) - abs(analytical["bend_angle"])) / abs(analytical["bend_angle"])
-        
-        return {
-            "cyclotron_radius_error": R_err,
-            "bend_angle_error": theta_err
-        }
+    return ValidationCase(
+        name="DipoleValidation",
+        level=1,
+        system_builder=lambda: lattice,
+        particle_source=source,
+        numerical_config=NumericalConfig(
+            dt=dt, max_steps=max_steps, max_steps_conv=max_steps_conv,
+            convergence=ConvergenceConfig(enabled=True, num_points=8),
+        ),
+        references=[ref],
+        metric_specs=[
+            (MomentumConservationMetric(), Tolerance(1e-6)),
+            (EnergyConservationMetric(), Tolerance(1e-6)),
+            (CyclotronRadiusErrorMetric(), Tolerance(1e-4)),
+            (BendAngleErrorMetric(), Tolerance(1e-2)),
+        ],
+        output_config=OutputConfig(),
+        metadata={
+            "element": "dipole",
+            "analytical_position_fn": analytical_position_fn,
+            **meta,
+        },
+    )
 
-    def get_tolerances(self):
-        return {
-            "cyclotron_radius_error": 1e-4,
-            "bend_angle_error": 1e-2
-        }
+
+def build_dipole_case_from_config(config):
+    return build_dipole_case(
+        lattice=config.lattice,
+        R_init=config.R_init,
+        V_init=config.V_init,
+        gamma_init=config.gamma_init,
+        charges=config.charges,
+        dt=config.dt,
+        max_steps=config.max_steps,
+        max_steps_conv=config.max_steps_conv,
+        use_mock_data=config.use_mock_data,
+        z_start=config.lattice.z_start,
+        dipole_length=config.lattice.elements[0].L,
+        dipole_by=config.lattice.elements[0].By,
+        aperture_radius=config.lattice.elements[0].aperture_radius,
+        config_context=config,
+    )

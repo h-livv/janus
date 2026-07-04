@@ -98,7 +98,7 @@ mkdir geant4-install
 cd geant4-build
 
 cmake \
-  -DCMAKE_INSTALL_PREFIX=$HOME/opt/Geant4/geant4-install \
+  -DCMAKE_INSTALL_PREFIX=$HOME/software/Geant4/geant4-install \
   -DGEANT4_INSTALL_DATA=ON \
   -DGEANT4_USE_QT=ON \
   -DGEANT4_USE_OPENGL_X11=ON \
@@ -173,7 +173,7 @@ Expected output:
 
 # Building This Project
 
-From the project root:
+From janus/engine:
 
 ```bash
 mkdir -p build

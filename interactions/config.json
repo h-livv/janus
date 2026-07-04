@@ -27,7 +27,7 @@
         "record_mode": "Hit"
     },
     "run_settings": {
-        "interactive": false,
+        "interactive": true,
         "physics_list": "FTFP_BERT",
         "production_cut": null,
         "tracking_cut": null,
