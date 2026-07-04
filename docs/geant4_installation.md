@@ -197,7 +197,7 @@ pip install -r requirements.txt
 Run the python interface:
 
 ```bash
-python collision/run.py
+python interactions/run.py
 ```
 
 ---
@@ -227,7 +227,7 @@ For the Python data pipeline, install:
 pip install uproot awkward
 ```
 
-To use the data pipeline, set `"interactive": false` in collision/config.json
+To use the data pipeline, set `"interactive": false` in interactions/config.json
 
 ---
 

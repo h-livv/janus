@@ -37,12 +37,12 @@ def main():
 
     root_path = args.root_file
     if not root_path:
-        runs = glob.glob("runs/run_*")
+        runs = glob.glob("interactions/runs/run_*")
         if not runs:
-            # Fallback to outputs/ if runs/ doesn't exist
+            # Fallback to outputs/ if interactions/runs/ doesn't exist
             runs = glob.glob("outputs/run_*")
         if not runs:
-            print("Fatal Error: No output directories found in runs/ or outputs/ and no file provided.")
+            print("Fatal Error: No output directories found in interactions/runs/ or outputs/ and no file provided.")
             sys.exit(1)
         latest_run = max(runs, key=os.path.getmtime)
         root_path = os.path.join(latest_run, "validation.root")
@@ -195,9 +195,9 @@ def main():
 
     log_print("\n[+] Validation Suite Passed Successfully. Transport simulation may proceed.")
     
-    # Write report to validation/validation_outputs/<run_name>
+    # Write report to interactions/validation/validation_outputs/<run_name>
     run_name = os.path.basename(os.path.dirname(root_path))
-    output_dir = os.path.join("validation", "validation_outputs", run_name)
+    output_dir = os.path.join("interactions", "validation", "validation_outputs", run_name)
     os.makedirs(output_dir, exist_ok=True)
     with open(os.path.join(output_dir, "phase_1_2_3_report.txt"), "w") as rf:
         rf.write("\n".join(report_lines) + "\n")
