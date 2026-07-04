@@ -1,6 +1,15 @@
 """
 Simulation configuration — compatibility view built from Experiment.
+
+Temporary compatibility adapter.
+
+Bridges the new Experiment architecture with legacy transport and
+visualization APIs.
+
+Will be removed once all downstream consumers operate directly on
+resolved Experiment objects.
 """
+
 from dataclasses import dataclass
 
 import numpy as np
