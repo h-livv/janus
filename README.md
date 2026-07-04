@@ -13,13 +13,41 @@ Janus is a computational framework for modeling the antimatter pipeline, integra
 
 ---
 
+## Computational Pipeline
+
+Janus models the antimatter pipeline as a sequence of independently validated computational stages.
+
+Current and planned workflow:
+
+```
+  Geant4 Engine
+       │
+       ▼
+  Interactions
+       │
+       ▼
+    Transport
+       │
+       ▼
+    Cooling
+       │
+       ▼
+    Trapping
+       │
+       ▼
+Global Optimization
+```
+
+---
+
 ## Documentation
 
 - [Installation](docs/geant4_installation) - Building Geant4 and setting up Janus
 - [Physics](docs/PHYSICS.md) - Physics, architecture and philosophy behind the project
+- [Architecture](docs/ARCHITECTURE.md) - A detailed, in-depth analysis of the project's architecture and data flow
+- [Architectural Roadmap](architectural_changes.md) - Planned architectural evolution of the framework, contributions and pull requests are welcome
 - [Collision Validation](docs/collision_validation.md) - Validation methodology and benchmark results for the collision engine
 - [Transport Validation](docs/transport_validation.md) - Validation studies for the transport solver and lattice elements
-
 
 ---
 
@@ -67,14 +95,14 @@ Transport validation studies are continuously updated in [docs/transport_validat
 
 ## Current Capabilities
 
-### Geant4 Simulation Engine
+### Geant4 Interaction Engine
 - Configurable target, materials, and geometry
 - Custom beam profiles and energy distributions
 - Physics list selection (FTFP_BERT, QGSP_BIC)
 - Secondary particle generation and filtering
 - Multithreaded batch execution
 
-### Dataset Generation
+### Interaction Pipeline
 - Automated simulation orchestration
 - ROOT and NPZ dataset generation
 - Large-scale Monte Carlo runs
@@ -86,9 +114,8 @@ Transport validation studies are continuously updated in [docs/transport_validat
     - Drift spaces
     - Dipoles
     - Extensible beamline elements
-- Hierarchical transport validation
-- Analytical verification of lattice elements
-- Second-order convergence verification
+- Analytical validation against closed-form solutions
+- Conservation and convergence verification
 
 ---
 
@@ -97,30 +124,30 @@ Transport validation studies are continuously updated in [docs/transport_validat
 
 ```
 janus/
-├── docs/                         # Physics, validation, and setup documentation
+├── docs/                             # Physics, validation, and setup documentation
 │
-├── engine/                       # C++ Geant4 collision engine
-│   ├── include/, src/            # Detector geometry, physics, event generation
-│   ├── macros/                   # Geant4 macro scripts
-│   └── janus.cc                  # Simulation entry point
+├── engine/                           # C++ Geant4 interaction engine
+│   ├── include/, src/                # Detector geometry, physics, event generation
+│   ├── macros/                       # Geant4 macro scripts
+│   └── janus.cc                      # Simulation entry point
 │
-├── interactions/                 # Interaction run orchestration
-│   ├── run.py, run_batches.py    # Single and batch execution
-│   ├── config.json               # Default run configuration
-│   ├── runs/                     # Geant4 output (ROOT datasets)
-│   ├── validation/               # Collision-stage validation scripts
-│   │   ├── validate.py           # Conservation and sanity checks
-│   │   └── physical_validation.py # Diagnostic plots and benchmarks
-│   └── dependencies/             # Pipeline utilities and Geant4 interface
+├── interactions/                     # Interaction run orchestration
+│   ├── run.py, run_batches.py        # Single and batch execution
+│   ├── config.json                   # Default run configuration
+│   ├── runs/                         # Geant4 output (ROOT datasets)
+│   ├── validation/                   # Interaction-stage validation scripts
+│   │   ├── validate.py               # Conservation and sanity checks
+│   │   └── physical_validation.py    # Diagnostic plots and benchmarks
+│   └── dependencies/                 # Pipeline utilities and Geant4 interface
 │
-├── transport/                    # Deterministic transport framework
-│   ├── main.py                   # Experiment runner (YAML → validate or visualize)
-│   ├── experiment/               # Experiment schema, loader, example YAMLs
-│   ├── io/                       # ROOT I/O and seed extraction
-│   ├── physics/                  # Boris integrator, particle data
-│   ├── lattice/                  # Beamline elements and element registry
-│   ├── validation/               # Validation engine, cases, metrics, reporting
-│   └── visualization/            # VisPy 3D viewport
+├── transport/                        # Deterministic transport framework
+│   ├── main.py                       # Experiment runner (YAML → validate or visualize)
+│   ├── experiment/                   # Experiment schema, loader, example YAMLs
+│   ├── io/                           # ROOT I/O and seed extraction
+│   ├── physics/                      # Boris integrator, particle data
+│   ├── lattice/                      # Beamline elements and element registry
+│   ├── validation/                   # Validation engine, cases, metrics, reporting
+│   └── visualization/                # VisPy 3D viewport
 ```
 
 
