@@ -109,6 +109,11 @@ def validation_case_from_experiment(experiment: Experiment):
         )
     initialize_registries()
     config = experiment_to_simulation_config(experiment)
+    if len(config.lattice.elements) > 1 and ps.n_particles < 2:
+        raise ValueError(
+            "Composite lattice validation requires n_particles >= 2. "
+            "Use particle_source type 'gaussian_beam' with n_particles >= 2."
+        )
     case = case_for_config(config)
     case.particle_source = build_particle_source(experiment.particle_source)
     case.numerical_config = experiment.numerical

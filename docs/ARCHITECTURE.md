@@ -5,6 +5,15 @@ Janus is a particle simulation and transport repository. The repository contains
 
 The current transport framework is YAML-driven. A user provides an experiment file, `transport.main` loads it into typed experiment objects, resolves particle sources and lattices, then either runs validation or launches visualization depending on `outputs.visualization`.
 
+Validation is organized in three tiers matched to lattice complexity: **analytical** (single-element trajectory checks), **simple_composite** (two-element beam composition), and **beam_optics** (multi-cell alternating-gradient lattices). Tier selection is automatic from the experiment `case` name via `transport.validation.profiles`.
+
+Related documentation:
+
+- [Transport validation](transport_validation.md) — scientific validation results and methodology
+- [Collision validation](collision_validation.md) — Geant4 collision-stage checks (upstream of transport)
+- [Architectural changes](architectural_changes.md) — planned refactors and known technical debt
+- [Physics](PHYSICS.md) — field models and integrator details
+
 The transport stack is centered around these runtime objects:
 
 ```text
@@ -18,7 +27,8 @@ BorisSolverAdapter / track_particles
 ↓
 Diagnostics
 ↓
-References + Metrics
+[Analytical tier]  References → trajectory + conservation metrics
+[Composite tiers]  apply_validation_profile (no references) → beam metrics
 ↓
 Report / JSON / CSV / Manifest / Plots
 ```
@@ -40,7 +50,7 @@ run_visual_physics_loop + run_renderer
 ## Repository Overview
 ```text
 janus/
-├── docs/                         # Project documentation and validation notes
+├── docs/                         # Project documentation (architecture, transport/collision validation)
 ├── engine/                       # C++ Geant4 simulation engine
 │   ├── include/                  # Geant4 class headers
 │   ├── src/                      # Geant4 implementation files
@@ -57,9 +67,9 @@ janus/
 │   ├── pipeline.py               # Validation and visualization orchestration
 │   ├── experiment/               # YAML schema, loader, resolver, examples
 │   ├── io/                       # ROOT and NPZ seed loading
-│   ├── lattice/                  # Beamline elements and lattice registry
+│   ├── lattice/                  # Beamline elements, patterns, and element registry
 │   ├── physics/                  # Particle data and Boris solver
-│   ├── validation/               # Validation engine, cases, metrics, references, reporting
+│   ├── validation/               # Validation engine, profiles, cases, metrics, references, reporting
 │   └── visualization/            # VisPy renderer and drawing primitives
 ```
 
@@ -70,7 +80,7 @@ Responsibilities are divided by simulation stage:
 - `interactions/runs/` stores generated ROOT files.
 - `transport/io/` extracts transport seeds from Geant4 ROOT output.
 - `transport/experiment/` turns YAML into typed experiment objects.
-- `transport/lattice/` owns beamline geometry and field queries.
+- `transport/lattice/` owns beamline geometry, lattice patterns (repeat/FODO expansion), and field queries.
 - `transport/physics/` owns particle constants and time integration.
 - `transport/validation/` owns validation cases, metrics, references, convergence, and reports.
 - `transport/visualization/` owns the interactive 3D display.
@@ -124,7 +134,7 @@ Owns high-level execution orchestration. It contains:
 
 `transport/simulation_config.py`
 
-Defines `SimulationConfig`, a compatibility view built from an `Experiment`. It carries resolved runtime objects such as lattice, initial arrays, timestep, max steps, mass, and species. It also contains `expand_beam`, used by visualization when a non-Geant4, non-Gaussian single-particle source needs to be expanded into a displayed beam.
+**Transitional compatibility layer** (see [architectural changes](architectural_changes.md)). Defines `SimulationConfig`, a bridge view built from an `Experiment`. It carries resolved runtime objects such as lattice, initial arrays, timestep, max steps, mass, and species. It also contains `expand_beam`, used by visualization when a non-Geant4, non-Gaussian single-particle source needs to be expanded into a displayed beam. Planned for removal once all consumers operate directly on resolved `Experiment` objects.
 
 ---
 
@@ -145,7 +155,7 @@ Owns experiment dataclasses:
 
 `transport/experiment/loader.py`
 
-Owns YAML loading. It uses `yaml.safe_load`, extracts top-level YAML sections, and constructs typed dataclasses.
+Owns YAML loading. It uses `yaml.safe_load`, extracts top-level YAML sections, and constructs typed dataclasses. Lattice sections are expanded by `_parse_lattice_elements`, which delegates to `transport.lattice.patterns` for `repeat` and `fodo` blocks.
 
 `transport/experiment/resolver.py`
 
@@ -153,7 +163,11 @@ Owns conversion from declarative experiment objects into runtime objects. It bui
 
 `transport/experiment/examples/*.yaml`
 
-Contains example experiments for drift, dipole, and drift-dipole.
+Contains example experiments for all validated cases:
+
+- `drift.yaml`, `dipole.yaml`, `quadrupole.yaml` — Level 1 single-element studies
+- `drift_dipole.yaml`, `drift_quadrupole.yaml` — Level 2 simple composites
+- `fodo.yaml`, `acol.yaml` — Level 2 beam-optics lattices (repeat blocks)
 
 ---
 
@@ -172,13 +186,24 @@ Owns beamline element classes and lattice composition:
 - `Element`
 - `Drift`
 - `Dipole`
+- `Quadrupole`
 - `SimpleLattice`
 
 Elements own local field and aperture behavior. `SimpleLattice` owns ordered placement of elements along `z`.
 
+`Quadrupole` implements a linear quadrupole field ($B_x = ky$, $B_y = kx$) with focusing strength $k$.
+
+`transport/lattice/patterns.py`
+
+Owns declarative lattice expansion helpers used by the YAML loader:
+
+- `expand_repeat_elements` — tiles a `cell` over a target length with optional `prefix`/`suffix` and closing drift
+- `fodo_cell` / `expand_fodo_elements` — builds standard QF–Drift–QD–Drift cells
+- `repeat_summary` — metadata about repeat tiling (cell count, remainder drift)
+
 `transport/lattice/registry.py`
 
-Owns the element registry and declarative lattice construction. It registers `drift` and `dipole` and builds a `SimpleLattice` from `LatticeSpec`.
+Owns the element registry and declarative lattice construction. It registers `drift`, `dipole`, and `quadrupole`, then builds a `SimpleLattice` from a resolved `LatticeSpec`.
 
 ---
 
@@ -225,6 +250,18 @@ Owns the solver abstraction and the adapter around the Boris solver.
 
 Owns the versioned diagnostics wrapper around raw solver output.
 
+`transport/validation/profiles.py`
+
+Owns validation tier selection and metric assignment for composite cases. Three tiers are defined:
+
+| Tier | Cases | Profile key | Metrics |
+|------|-------|-------------|---------|
+| Analytical | `drift`, `dipole`, `quadrupole` | `analytical` | Trajectory error, conservation, analytical/self convergence |
+| Simple composite | `drift_dipole`, `drift_quadrupole` | `simple_composite` | Conservation, exit-state agreement, envelope, emittance drift, transmission |
+| Beam optics | `fodo`, `acol` | `beam_optics` | Full beam diagnostics including transmission, particle loss, envelope, emittance |
+
+`validation_tier(case_type)` maps case names to tiers. `apply_validation_profile(case, config)` replaces references and metric specs for non-analytical cases. Horizontal emittance drift is informational when the lattice contains a dipole (dispersion expected).
+
 `transport/validation/registry.py`
 
 Owns registries for cases, metrics, references, sources, convergence strategies, and solvers.
@@ -234,19 +271,35 @@ Owns registries for cases, metrics, references, sources, convergence strategies,
 ### Validation Cases
 `transport/validation/cases/drift.py`
 
-Builds the drift validation case.
+Builds the drift validation case (Level 1, analytical profile).
 
 `transport/validation/cases/dipole.py`
 
-Builds the dipole validation case.
-
-`transport/validation/cases/drift_dipole.py`
-
-Builds the composite drift-dipole validation case.
+Builds the dipole validation case (Level 1, analytical profile).
 
 `transport/validation/cases/quadrupole.py`
 
-Defines a quadrupole validation case placeholder implemented using a drift lattice.
+Builds the quadrupole validation case (Level 1, analytical profile with paraxial reference).
+
+`transport/validation/cases/drift_dipole.py`
+
+Legacy case builder stub (Level 2). The programmatic builder still carries `TransferMatrixReference`, disabled convergence, and stub metadata. **YAML-driven validation does not use these defaults**: `case_for_config` invokes this builder, then `apply_validation_profile` replaces references and metrics with the `simple_composite` tier spec. Other Level 2 cases (`drift_quadrupole`, `fodo`, `acol`) route through `composite.py` directly; `drift_dipole` remains on the legacy builder path but behaves identically at runtime after profile application.
+
+`transport/validation/cases/drift_quadrupole.py`
+
+Builds the drift → quadrupole composite case (Level 2).
+
+`transport/validation/cases/fodo.py`
+
+Builds the repeating FODO lattice case (Level 2, beam-optics profile).
+
+`transport/validation/cases/acol.py`
+
+Builds the minimal ACOL-inspired beamline case (Level 2, beam-optics profile).
+
+`transport/validation/cases/composite.py`
+
+Shared builder for composite and beam-optics cases. Creates a `ValidationCase` with self-convergence enabled, then delegates to `apply_validation_profile` for tier-appropriate metrics.
 
 `transport/validation/cases/solenoid.py`
 
@@ -281,7 +334,15 @@ Contains convergence-study support.
 
 `transport/validation/metrics/beam.py`
 
-Contains beam-level metrics: centroid, RMS size, transmission, and emittance.
+Implements beam-level metrics for composite validation:
+
+- `CentroidMetric`, `RmsSizeMetric` — ensemble position statistics
+- `ExitCentroidMetric`, `ExitDirectionMetric` — exit-plane centroid and angle (informational)
+- `ExitStateAgreementMetric` — combined exit transverse position/angle spread (simple-composite tier)
+- `TransmissionMetric`, `ParticleLossMetric` — survival fraction and loss curves (beam-optics tier)
+- `BeamEnvelopeMetric` — RMS $\sigma_x$, $\sigma_y$ vs longitudinal position
+- `HorizontalEmittanceDriftMetric`, `VerticalEmittanceDriftMetric` — relative emittance change $(\varepsilon-\varepsilon_0)/\varepsilon_0$
+- `EmittanceMetric` — absolute plane emittance
 
 `transport/validation/metrics/legacy.py`
 
@@ -296,7 +357,11 @@ Defines the reference-solution interface, reference types, capabilities, and res
 
 `transport/validation/references/analytical.py`
 
-Implements drift and dipole analytical references, plus a stub analytical reference.
+Implements drift, dipole, and quadrupole analytical references, plus a stub analytical reference.
+
+`transport/validation/references/composite.py`
+
+Implements `LatticeAnalyticalReference` for stitched multi-element paraxial trajectories (Drift + Quadrupole assemblies). This reference is **infrastructure only** — active composite and beam-optics tiers clear references via `apply_validation_profile` and validate through beam metrics instead.
 
 `transport/validation/references/numerical.py`
 
@@ -365,7 +430,16 @@ Writes `report.txt`, `results.json`, `metrics.csv`, and `manifest.json`.
 
 `transport/validation/reporting/plot_generator.py`
 
-Generates conservation, error, and convergence plots from plot payload dictionaries.
+Generates plots from metric plot payloads:
+
+- conservation, error, convergence (log–log for analytical; linear for composite)
+- envelope, emittance (horizontal/vertical), transmission, loss
+
+Longitudinal plots annotate element boundaries via `_annotate_lattice_elements`.
+
+`transport/validation/reporting/lattice_annotations.py`
+
+Provides element display labels (Drift, QF, QD, Dipole), `lattice_elements_payload` for plot metadata, and `uses_longitudinal_position` detection.
 
 ---
 
@@ -447,7 +521,7 @@ Stores output toggles: report, JSON, CSV, manifest, plots, visualization, output
 
 `SimulationConfig`
 
-Compatibility runtime config. It owns resolved lattice, initial arrays, timestep, max steps, max convergence steps, mass, species, and case type. It is created by `experiment_to_simulation_config`.
+Compatibility runtime config. It owns resolved lattice, initial arrays, timestep, max steps, max convergence steps, mass, species, and case type. It is created by `experiment_to_simulation_config`. Marked for removal; see [architectural changes](architectural_changes.md).
 
 ---
 
@@ -468,6 +542,10 @@ Element subclass with zero magnetic field. It draws a drift volume and optional 
 `Dipole`
 
 Element subclass with uniform vertical magnetic field `By`. It draws field volume and optional aperture pipe.
+
+`Quadrupole`
+
+Element subclass with linear quadrupole field ($B_x = ky$, $B_y = kx$). Focusing strength $k>0$ denotes QF; $k<0$ denotes QD. It draws a field box and optional aperture pipe.
 
 `SimpleLattice`
 
@@ -514,7 +592,7 @@ Stores explicit arrays and returns a copied `ParticleBatch`. Used for single/moc
 
 Loads the latest `simulation.root`, extracts seeds through `data_io`, filters them, and returns a `ParticleBatch`. It supports `charge_filter`, `momentum_slice`, `particle_index`, `species`, and `n_particles`.
 
-For validation, `validation_case_from_experiment` requires Geant4 `n_particles` to be `1`. For visualization, `experiment_to_simulation_config` can produce multiple Geant4 particles.
+For validation, `validation_case_from_experiment` requires Geant4 `n_particles` to be `1`, and composite lattices (`len(elements) > 1`) to have `n_particles >= 2`. For visualization, `experiment_to_simulation_config` can produce multiple Geant4 particles.
 
 `GaussianBeamSource`
 
@@ -615,7 +693,19 @@ Metric placeholder for convergence; convergence itself is executed separately by
 
 `CentroidMetric`, `RmsSizeMetric`, `TransmissionMetric`, `EmittanceMetric`
 
-Beam-level metric classes operating on final diagnostics.
+Legacy beam-level metric classes operating on final diagnostics.
+
+`ExitStateAgreementMetric`, `ExitCentroidMetric`, `ExitDirectionMetric`
+
+Exit-plane composition metrics for simple-composite validation.
+
+`BeamEnvelopeMetric`, `HorizontalEmittanceDriftMetric`, `VerticalEmittanceDriftMetric`
+
+Longitudinal beam diagnostics for composite and beam-optics tiers.
+
+`ParticleLossMetric`
+
+Complement of transmission ($1 - \text{transmission}$) for beam-optics cases.
 
 ---
 
@@ -635,6 +725,10 @@ Produces analytical drift trajectory from diagnostics and initial velocity.
 `DipoleAnalyticalReference`
 
 Produces dipole summary observables and has `position_at_time` for analytical convergence.
+
+`QuadrupoleAnalyticalReference`
+
+Produces paraxial quadrupole pointwise trajectory under constant $p_z$.
 
 `StubAnalyticalReference`
 
@@ -669,7 +763,7 @@ Looks for `case.metadata["analytical_position_fn"]`. If present, it calls `run_c
 
 `SelfConvergence`
 
-Runs a refinement ladder and compares successive exit positions without analytical reference.
+Runs a refinement ladder and compares each coarse-grid exit state to the **finest-grid** exit position (not successive pairs). For composite and beam-optics tiers, convergence plots use **linear** error-versus-$\Delta t$ axes; single-element analytical cases use log–log axes.
 
 ---
 
@@ -709,16 +803,21 @@ Registered names:
 - `drift`
 - `dipole`
 - `drift_dipole`
+- `drift_quadrupole`
 - `quadrupole`
+- `fodo`
+- `acol`
 - `solenoid`
 - `horn`
 - `gaussian_beam`
 
-`case_for_config(config)` does not use `case_registry` directly. It uses `_case_config_builders`, currently populated for:
+`case_for_config(config)` uses `_case_config_builders`, populated for all Level 1 and Level 2 validated cases:
 
-- `drift`
-- `dipole`
-- `drift_dipole`
+- `drift`, `dipole`, `quadrupole`
+- `drift_dipole`, `drift_quadrupole`
+- `fodo`, `acol`
+
+For composite and beam-optics cases, `case_for_config` calls `apply_validation_profile` to assign tier-appropriate metrics.
 
 ### `metric_registry`
 Stores metric factories.
@@ -732,6 +831,17 @@ Registered names:
 - `z_error`
 - `cyclotron_radius_error`
 - `bend_angle_error`
+- `centroid_x`
+- `rms_x`
+- `transmission`
+- `beam_envelope`
+- `exit_centroid`
+- `exit_direction`
+- `exit_state_agreement`
+- `particle_loss`
+- `horizontal_emittance_drift`
+- `vertical_emittance_drift`
+- `emittance_x`
 
 YAML metric overrides are resolved through this registry by `build_metric_specs`.
 
@@ -788,8 +898,9 @@ Registered names:
 
 - `drift`
 - `dipole`
+- `quadrupole`
 
-`build_lattice` uses this registry to construct `SimpleLattice` from YAML `ElementSpec` objects.
+`build_lattice` uses this registry to construct `SimpleLattice` from YAML `ElementSpec` objects. The loader may expand `repeat` or `fodo` blocks into flat element lists before `build_lattice` is called.
 
 ### Registration Timing
 `initialize_registries()` registers all validation-side registries and calls `register_builtin_elements()`.
@@ -819,6 +930,12 @@ outputs:
 `load_experiment(path)` opens the YAML file, calls `yaml.safe_load`, and delegates to `Experiment.from_dict`.
 
 `Experiment.from_dict` calls `parse_experiment_dict`.
+
+The loader supports three mutually exclusive lattice declaration styles (see `lattice` configuration below):
+
+- flat `elements` list
+- `repeat` block (cell tiling with optional prefix/suffix)
+- `fodo` block (FODO cell shorthand)
 
 `parse_experiment_dict` creates:
 
@@ -854,10 +971,11 @@ The resolver turns specs into runtime objects.
 1. Rejects Geant4 validation if `n_particles != 1`.
 2. Initializes registries.
 3. Converts experiment to `SimulationConfig`.
-4. Resolves the case via `case_for_config`.
-5. Replaces the case particle source with one built directly from the experiment source spec.
-6. Replaces numerical and output config with experiment-provided config.
-7. Replaces metric specs if YAML provided explicit metrics.
+4. Rejects composite lattice validation if `len(elements) > 1` and `n_particles < 2` (requires `gaussian_beam` with at least two particles).
+5. Resolves the case via `case_for_config` (applies validation profile for composite/beam-optics tiers).
+6. Replaces the case particle source with one built directly from the experiment source spec.
+7. Replaces numerical and output config with experiment-provided config.
+8. Replaces metric specs if YAML provided explicit metrics.
 
 ---
 
@@ -874,7 +992,24 @@ A `ValidationCase` contains:
 - output settings
 - metadata
 
+For composite and beam-optics cases, `apply_validation_profile` (in `profiles.py`) replaces case-default references and metrics with tier-appropriate specs before execution.
+
 `ValidationEngine.run` is the central execution path.
+
+### Validation Tiers
+```text
+experiment.case
+↓
+validation_tier(case_type)
+↓
+analytical | simple_composite | beam_optics
+↓
+apply_validation_profile (composite / beam-optics only)
+↓
+ValidationCase with tier-appropriate metric_specs
+```
+
+Single-element cases retain analytical references and trajectory metrics defined in their case builders. Composite cases drop analytical references and use beam diagnostics instead.
 
 ### Engine Flow
 1. Choose lattice:
@@ -969,6 +1104,7 @@ Current implemented elements:
 
 - `Drift`: zero magnetic field
 - `Dipole`: uniform `By`
+- `Quadrupole`: linear field $B_x = ky$, $B_y = kx$
 
 The base `Element.em_field` returns zero electric field and magnetic field from `field`.
 
@@ -1065,26 +1201,63 @@ SimulationConfig / ValidationCase / Solver
 ```
 
 ### `lattice`
-Fields:
+The lattice section accepts exactly one of three declaration styles:
 
-- `z_start`
-- `elements`
+**Flat elements:**
+
+```yaml
+lattice:
+  z_start: 0.0
+  elements:
+    - {type: drift, length: 5.0, aperture: 10.0}
+    - {type: quadrupole, length: 1.0, k: 0.5, aperture: 10.0}
+```
+
+**Repeat block** (cell tiling):
+
+```yaml
+lattice:
+  z_start: 0.0
+  repeat:
+    length: 50.0
+    aperture: 1.0
+    prefix:
+      - {type: drift, length: 5.0}
+    cell:
+      - {type: quadrupole, length: 1.0, k: 0.5}
+      - {type: drift, length: 2.0}
+      - {type: quadrupole, length: 1.0, k: -0.5}
+      - {type: drift, length: 2.0}
+```
+
+**FODO shorthand:**
+
+```yaml
+lattice:
+  z_start: 0.0
+  fodo:
+    length: 50.0
+    k: 0.5
+    quadrupole_length: 1.0
+    drift_length: 2.0
+    aperture: 1.0
+```
 
 Each element has:
 
 - `type`
-- element-specific params such as `length`, `aperture`, `by`
+- element-specific params such as `length`, `aperture`, `by` (dipole), `k` (quadrupole)
 
 Propagation:
 
 ```text
-LatticeSpec
+LatticeSpec (flat elements after loader expansion)
 ↓
 build_lattice
 ↓
 ElementRegistry
 ↓
-Drift / Dipole
+Drift / Dipole / Quadrupole
 ↓
 SimpleLattice
 ```
@@ -1153,7 +1326,7 @@ Fields:
 
 ## End-to-End Data Flow
 
-### Geant4 Output to Validation
+### Analytical Validation (Level 1, Geant4 or mock)
 ```text
 Geant4 engine
 ↓
@@ -1165,33 +1338,42 @@ transport.io.data_io.extract_cern_ad_seeds
 ↓
 positions, velocities, gammas, charges
 ↓
-Geant4ParticleSource.generate
+Geant4ParticleSource.generate (n_particles: 1)
 ↓
 ParticleBatch
 ↓
-Experiment resolver
+Experiment resolver → ValidationCase (analytical tier)
 ↓
-SimulationConfig
+BorisSolverAdapter → track_particles → Diagnostics
 ↓
-ValidationCase
+ValidationContext → ReferenceSolution.resolve
 ↓
-BorisSolverAdapter
-↓
-track_particles
-↓
-Diagnostics
-↓
-ValidationContext
-↓
-ReferenceSolution.resolve
-↓
-Metric.compute
-↓
-MetricEvaluation
+Trajectory + conservation metrics
 ↓
 Reporter / ResultStore / PlotGenerator
 ↓
 report.txt, results.json, metrics.csv, manifest.json, plots
+```
+
+### Composite / Beam-Optics Validation (Level 2, Gaussian beam)
+```text
+YAML experiment (gaussian_beam, n_particles ≥ 2)
+↓
+loader._parse_lattice_elements (repeat / fodo expansion if present)
+↓
+build_lattice → SimpleLattice
+↓
+case_for_config → apply_validation_profile (references cleared)
+↓
+GaussianBeamSource.generate → ParticleBatch
+↓
+BorisSolverAdapter → track_particles → Diagnostics
+↓
+Beam metrics (envelope, emittance drift, transmission, loss)
+↓
+PlotGenerator + lattice_annotations (element boundaries on z plots)
+↓
+transport/validation/outputs/run_<timestamp>/<case>/
 ```
 
 ### ROOT / NPZ Loading
@@ -1262,7 +1444,8 @@ transport.main
 
 transport.experiment.loader
 ├── transport.experiment.schema
-└── transport.validation.config
+├── transport.validation.config
+└── transport.lattice.patterns   # repeat/fodo expansion
 
 transport.experiment.resolver
 ├── transport.experiment.schema
@@ -1279,8 +1462,9 @@ transport.lattice.registry
 transport.validation.engine
 ├── transport.validation.case
 ├── transport.validation.config
+├── transport.validation.profiles
 ├── transport.validation.reporting.*
-├── transport.validation.registry
+├── transport.validation.registry   # case_for_config → profiles
 └── transport.validation.solver
 
 transport.validation.solver
@@ -1314,7 +1498,7 @@ Ownership boundaries in the current implementation:
 - Resolver owns conversion from configuration to runtime objects.
 - Lattice package owns beamline elements and field interfaces.
 - Physics package owns particle motion.
-- Validation package owns validation semantics and output artifacts.
+- Validation package owns validation semantics, tier profiles, and output artifacts.
 - Visualization package owns rendering.
 - I/O package owns ROOT seed extraction.
 
@@ -1338,15 +1522,7 @@ Chronological flow:
 3. `argparse` parses `--experiment`.
 4. `load_experiment(path)` opens YAML and calls `yaml.safe_load`.
 5. `Experiment.from_dict` calls `parse_experiment_dict`.
-6. Loader builds:
-   - `ExperimentMeta`
-   - `ParticleSourceSpec`
-   - `LatticeSpec`
-   - `ConvergenceConfig`
-   - `NumericalConfig`
-   - `ValidationSpec`
-   - `OutputConfig`
-   - `Experiment`
+6. Loader builds experiment objects; `_parse_lattice_elements` expands `repeat`/`fodo` blocks if present.
 7. `main.py` checks `experiment.outputs.visualization`.
 8. If false, `run_experiment(experiment)` is called.
 9. `run_experiment` calls `initialize_registries`.
@@ -1358,31 +1534,33 @@ Chronological flow:
 15. Source `generate()` creates a `ParticleBatch`.
 16. `build_lattice` creates elements and a `SimpleLattice`.
 17. Geant4 lattices reset `z_start` to the first particle’s `z`.
-18. `SimulationConfig` is created.
-19. `case_for_config` selects the config-backed case builder.
-20. Case builder creates a `ValidationCase`.
-21. Resolver replaces case particle source, numerical config, output config, and optional metric specs.
-22. `solver_registry.build(experiment.numerical.solver_name)` creates `BorisSolverAdapter`.
-23. `run_experiment` calls `validation_case.particle_source.generate()`.
-24. `validation_case.build_system()` returns the lattice.
-25. Solver runs transport with initial arrays, lattice, dt, max steps, and mass.
-26. `track_particles` advances particles and records raw diagnostics.
-27. `BorisSolverAdapter` wraps diagnostics in `Diagnostics`.
-28. `ValidationEngine.run` is called with prebuilt lattice and diagnostics.
-29. Engine generates a new batch from the case particle source.
-30. Engine builds `ValidationContext`.
-31. Engine resolves references.
-32. Engine computes each metric.
-33. Engine applies tolerances and creates `MetricEvaluation` objects.
-34. If convergence is enabled, engine resolves convergence strategy and runs it.
-35. Engine renders validation report.
-36. Engine computes overall pass/fail.
-37. Engine creates output case directory.
-38. Engine writes report, JSON, CSV, manifest, and plots according to output settings.
-39. `run_experiment` prints reports.
-40. `run_experiment` returns pass/fail and output directory.
-41. `main.py` prints `STATUS: PASS` or `STATUS: FAIL`.
-42. Process exits with status code 0 or 1.
+18. If lattice has multiple elements and `n_particles < 2`, a `ValueError` is raised.
+19. `SimulationConfig` is created.
+20. `case_for_config` selects the config-backed case builder.
+21. Case builder creates a `ValidationCase`.
+22. For composite/beam-optics cases, `apply_validation_profile` assigns tier metrics and clears analytical references.
+23. Resolver replaces case particle source, numerical config, output config, and optional metric specs.
+24. `solver_registry.build(experiment.numerical.solver_name)` creates `BorisSolverAdapter`.
+25. `run_experiment` calls `validation_case.particle_source.generate()`.
+26. `validation_case.build_system()` returns the lattice.
+27. Solver runs transport with initial arrays, lattice, dt, max steps, and mass.
+28. `track_particles` advances particles and records raw diagnostics.
+29. `BorisSolverAdapter` wraps diagnostics in `Diagnostics`.
+30. `ValidationEngine.run` is called with prebuilt lattice and diagnostics.
+31. Engine generates a new batch from the case particle source.
+32. Engine builds `ValidationContext`.
+33. Engine resolves references (skipped when reference list is empty).
+34. Engine computes each metric.
+35. Engine applies tolerances and creates `MetricEvaluation` objects.
+36. If convergence is enabled, engine resolves convergence strategy and runs it.
+37. Engine renders validation report (includes `Validation Profile` tier label).
+38. Engine computes overall pass/fail.
+39. Engine creates output case directory.
+40. Engine writes report, JSON, CSV, manifest, and plots according to output settings.
+41. `run_experiment` prints reports.
+42. `run_experiment` returns pass/fail and output directory.
+43. `main.py` prints `STATUS: PASS` or `STATUS: FAIL`.
+44. Process exits with status code 0 or 1.
 
 ### Visualization Run
 Command is the same, but YAML has:
@@ -1487,7 +1665,11 @@ File writer for validation artifacts.
 
 `PlotGenerator`
 
-Matplotlib plot writer driven by metric payload dictionaries.
+Matplotlib plot writer driven by metric payload dictionaries. Supports conservation, error, convergence, envelope, emittance, transmission, and loss plot types. Annotates longitudinal plots with element-boundary markers.
+
+`ValidationProfile` / validation tier
+
+Automatic metric assignment keyed by experiment `case` name: `analytical`, `simple_composite`, or `beam_optics`. Defined in `transport.validation.profiles`.
 
 `run_renderer`
 

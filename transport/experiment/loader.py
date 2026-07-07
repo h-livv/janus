@@ -26,6 +26,46 @@ def load_experiment(path: str) -> Experiment:
     return Experiment.from_dict(data)
 
 
+def _parse_lattice_elements(lat: dict) -> list[dict]:
+    """Expand declarative lattice blocks into flat element dicts."""
+    has_elements = bool(lat.get("elements"))
+    has_repeat = "repeat" in lat
+    has_fodo = "fodo" in lat
+
+    if sum([has_elements, has_repeat, has_fodo]) > 1:
+        raise ValueError(
+            "Lattice config is ambiguous: use only one of 'elements', 'repeat', or 'fodo'"
+        )
+
+    if has_fodo:
+        from transport.lattice.patterns import expand_fodo_elements
+
+        fodo = lat["fodo"]
+        return expand_fodo_elements(
+            total_length=fodo["length"],
+            quadrupole_length=fodo["quadrupole_length"],
+            drift_length=fodo.get("drift_length", fodo.get("drift", 0.0)),
+            k=fodo["k"],
+            aperture_radius=fodo.get("aperture"),
+            prefix=fodo.get("prefix"),
+            suffix=fodo.get("suffix"),
+        )
+
+    if has_repeat:
+        from transport.lattice.patterns import expand_repeat_elements
+
+        repeat = lat["repeat"]
+        return expand_repeat_elements(
+            total_length=repeat["length"],
+            cell=repeat["cell"],
+            prefix=repeat.get("prefix"),
+            suffix=repeat.get("suffix"),
+            aperture_radius=repeat.get("aperture"),
+        )
+
+    return list(lat.get("elements", []))
+
+
 def parse_experiment_dict(data: dict) -> Experiment:
     exp = data.get("experiment", {})
     ps = data.get("particle_source", {})
@@ -54,8 +94,10 @@ def parse_experiment_dict(data: dict) -> Experiment:
         solver_name=num.get("solver", "boris"),
     )
 
+    raw_elements = _parse_lattice_elements(lat)
+
     elements = []
-    for el in lat.get("elements", []):
+    for el in raw_elements:
         el_copy = dict(el)
         el_type = el_copy.pop("type")
         elements.append(ElementSpec(type=el_type, params=el_copy))

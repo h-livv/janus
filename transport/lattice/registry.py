@@ -1,6 +1,6 @@
 """Lattice element registry and declarative lattice builder."""
 
-from transport.lattice.lattice import Dipole, Drift, SimpleLattice
+from transport.lattice.lattice import Dipole, Drift, Quadrupole, SimpleLattice
 
 
 class ElementRegistry:
@@ -41,10 +41,15 @@ def _make_dipole(**params):
     p = _normalize_params(params)
     return Dipole(p["length"], p["By"], aperture_radius=p.get("aperture_radius"))
 
+def _make_quadrupole(**params):
+    p = _normalize_params(params)
+    return Quadrupole(p["length"], p["k"], aperture_radius=p.get("aperture_radius"))
+
 
 def register_builtin_elements():
     element_registry.register("drift", _make_drift)
     element_registry.register("dipole", _make_dipole)
+    element_registry.register("quadrupole", _make_quadrupole)
 
 
 def build_lattice(lattice_spec):

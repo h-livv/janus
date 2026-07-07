@@ -45,12 +45,17 @@ def register_case(name: str, factory: Callable, config_factory: Callable = None)
     if config_factory:
         _case_config_builders[name.lower()] = config_factory
 
-
+    
 def case_for_config(config):
+    from transport.validation.profiles import apply_validation_profile, validation_tier
+
     key = config.case_type.lower()
     if key not in _case_config_builders:
         raise KeyError(f"No config factory for case '{key}'")
-    return _case_config_builders[key](config)
+    case = _case_config_builders[key](config)
+    if validation_tier(config.case_type) != "analytical":
+        case = apply_validation_profile(case, config)
+    return case
 
 
 def register_builtin_cases():
@@ -60,21 +65,44 @@ def register_builtin_cases():
         build_drift_dipole_case,
         build_drift_dipole_case_from_config,
     )
-    from transport.validation.cases.quadrupole import build_quadrupole_case
+    from transport.validation.cases.drift_quadrupole import (
+        build_drift_quadrupole_case,
+        build_drift_quadrupole_case_from_config,
+    )
+    from transport.validation.cases.fodo import build_fodo_case, build_fodo_case_from_config
+    from transport.validation.cases.acol import build_acol_case, build_acol_case_from_config
     from transport.validation.cases.solenoid import build_solenoid_case
     from transport.validation.cases.horn import build_horn_case
     from transport.validation.cases.gaussian_beam import build_gaussian_beam_case
 
+    from transport.validation.cases.quadrupole import build_quadrupole_case, build_quadrupole_case_from_config
+
     register_case("drift", build_drift_case, build_drift_case_from_config)
     register_case("dipole", build_dipole_case, build_dipole_case_from_config)
     register_case("drift_dipole", build_drift_dipole_case, build_drift_dipole_case_from_config)
-    case_registry.register("quadrupole", build_quadrupole_case)
+    register_case("quadrupole", build_quadrupole_case, build_quadrupole_case_from_config)
+    register_case("drift_quadrupole", build_drift_quadrupole_case, build_drift_quadrupole_case_from_config)
+    register_case("fodo", build_fodo_case, build_fodo_case_from_config)
+    register_case("acol", build_acol_case, build_acol_case_from_config)
     case_registry.register("solenoid", build_solenoid_case)
     case_registry.register("horn", build_horn_case)
     case_registry.register("gaussian_beam", build_gaussian_beam_case)
 
 
 def register_builtin_metrics():
+    from transport.validation.metrics.beam import (
+        BeamEnvelopeMetric,
+        CentroidMetric,
+        EmittanceMetric,
+        ExitCentroidMetric,
+        ExitDirectionMetric,
+        ExitStateAgreementMetric,
+        HorizontalEmittanceDriftMetric,
+        ParticleLossMetric,
+        RmsSizeMetric,
+        TransmissionMetric,
+        VerticalEmittanceDriftMetric,
+    )
     from transport.validation.metrics.conservation import EnergyConservationMetric, MomentumConservationMetric
     from transport.validation.metrics.trajectory import (
         BendAngleErrorMetric, CyclotronRadiusErrorMetric, DriftCoordinateErrorMetric,
@@ -87,6 +115,17 @@ def register_builtin_metrics():
     metric_registry.register("z_error", lambda: DriftCoordinateErrorMetric("z"))
     metric_registry.register("cyclotron_radius_error", CyclotronRadiusErrorMetric)
     metric_registry.register("bend_angle_error", BendAngleErrorMetric)
+    metric_registry.register("centroid_x", CentroidMetric)
+    metric_registry.register("rms_x", RmsSizeMetric)
+    metric_registry.register("transmission", TransmissionMetric)
+    metric_registry.register("beam_envelope", BeamEnvelopeMetric)
+    metric_registry.register("exit_centroid", ExitCentroidMetric)
+    metric_registry.register("exit_direction", ExitDirectionMetric)
+    metric_registry.register("exit_state_agreement", ExitStateAgreementMetric)
+    metric_registry.register("particle_loss", ParticleLossMetric)
+    metric_registry.register("horizontal_emittance_drift", HorizontalEmittanceDriftMetric)
+    metric_registry.register("vertical_emittance_drift", VerticalEmittanceDriftMetric)
+    metric_registry.register("emittance_x", EmittanceMetric)
 
 
 def register_builtin_references():

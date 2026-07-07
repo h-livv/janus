@@ -11,6 +11,8 @@ class Reporter:
         lines.append("=" * 60)
         lines.append(f"VALIDATION REPORT: {case.name}")
         lines.append("=" * 60)
+        profile = case.metadata.get("validation_profile", "analytical")
+        lines.append(f"Validation Profile: {profile}")
         lines.append(f"Number of Particles: {n_particles}")
         for idx, el in enumerate(lattice.elements):
             el_name = type(el).__name__
@@ -50,7 +52,8 @@ class Reporter:
             label = f"dt/{2 ** i}" if i > 0 else "dt"
             lines.append(f"{label:<5} ({dt:.3e}) Error: {err:.6e}")
         lines.append("-" * 60)
-        lines.append(f"Monotonic Convergence: {'PASS' if converged else 'FAIL'}")
+        lines.append(f"Timestep Refinement: {'PASS' if converged else 'FAIL'}")
+        lines.append("(Coarsest exit error decreases under dt refinement vs finest grid)")
         lines.append("=" * 60)
         return "\n".join(lines)
 

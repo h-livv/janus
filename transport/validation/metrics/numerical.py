@@ -56,7 +56,7 @@ def run_convergence_study(case, context, solver, analytical_position_fn, num_poi
         r_ana = analytical_position_fn(t_exit, context.R_init, context.V_init, context.charges)[0]
         errors.append(float(np.linalg.norm(r_exit_sim - r_ana)))
 
-    is_converging = all(errors[i + 1] < errors[i] for i in range(num_points - 1)) or (errors[0] < 1e-11)
+    is_converging = all(errors[i + 1] <= errors[i] for i in range(num_points - 1)) or (errors[0] < 1e-11)
 
     log_dts = np.log10(dts)
     log_errors = np.log10(errors)

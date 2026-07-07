@@ -25,4 +25,4 @@ numerical:
 validation:
   pass_criteria: all_must_pass
 
-outputs: {report: true, json: true, csv: true, manifest: true, plots: true, visualization: true}
+outputs: {report: true, json: true, csv: true, manifest: true, plots: true, visualization: false}

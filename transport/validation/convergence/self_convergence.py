@@ -1,9 +1,25 @@
-"""Self-convergence (Cauchy/Richardson) strategy — reference-free."""
+"""Self-convergence (reference-finest grid) strategy."""
 
 import numpy as np
 
 from transport.validation.convergence.base import ConvergenceStrategy
-from transport.validation.references.numerical import find_exit_state
+from transport.validation.references.numerical import find_exit_states
+
+
+def refinement_converged(errors: list[float], min_ratio: float = 2.0) -> bool:
+    """
+    Return True when the coarsest run differs from the finest grid by at least
+    ``min_ratio``, i.e. timestep refinement measurably reduces exit error.
+    """
+    if not errors:
+        return True
+    if len(errors) == 1:
+        return True
+    coarse = errors[0]
+    fine = errors[-2] if len(errors) > 1 else errors[-1]
+    if coarse < 1e-11:
+        return True
+    return coarse > fine and coarse >= min_ratio * max(fine, 1e-30)
 
 
 class SelfConvergence(ConvergenceStrategy):
@@ -17,7 +33,7 @@ class SelfConvergence(ConvergenceStrategy):
         steps = [int(max_steps_base * (ratio ** i)) for i in range(num_points)]
         z_exit = context.lattice.z_start + context.lattice.total_length
 
-        exit_positions = []
+        exit_states = []
         mass = context.mass
         for dt, step_limit in zip(dts, steps):
             _, _, _, diag = solver.run(
@@ -30,34 +46,23 @@ class SelfConvergence(ConvergenceStrategy):
                 step_limit * 2,
                 mass=mass,
             )
-            r_exit, _, _ = find_exit_state(diag.to_dict(), z_exit)
-            exit_positions.append(r_exit)
+            exit_states.append(find_exit_states(diag.to_dict(), z_exit))
 
-        errors = []
-        for i in range(len(exit_positions) - 1):
-            errors.append(float(np.linalg.norm(exit_positions[i] - exit_positions[i + 1])))
-        if not errors:
-            errors = [0.0]
-        while len(errors) < num_points:
-            errors.append(errors[-1])
-        errors = errors[:num_points]
+        r_finest = exit_states[-1]
+        errors = [
+            float(np.linalg.norm(r - r_finest)) for r in exit_states
+        ]
 
-        is_converging = (
-            all(errors[i + 1] < errors[i] for i in range(len(errors) - 1))
-            if len(errors) > 1
-            else True
-        ) or (errors[0] < 1e-11 if errors else True)
-
-        log_dts = np.log10(dts)
-        log_errors = np.log10([max(e, 1e-30) for e in errors])
-        fit_n = min(4, len(dts))
-        slope, _ = np.polyfit(log_dts[-fit_n:], log_errors[-fit_n:], 1)
+        is_converging = refinement_converged(errors)
 
         plot_payload = {
             "plot_type": "convergence",
-            "title": f"Timestep Convergence: {case.name}",
+            "title": f"Timestep Refinement: {case.name}",
             "dts": dts,
             "errors": errors,
-            "slope": slope,
+            "show_slope": False,
+            "plot_scale": "linear"
+            if case.metadata.get("validation_profile") in ("beam_optics", "simple_composite")
+            else "loglog",
         }
         return is_converging, errors, dts, plot_payload

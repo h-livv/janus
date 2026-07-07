@@ -111,6 +111,105 @@ class DipoleAnalyticalReference(ReferenceSolution):
         z_t = z0 + (vz0 / omega_c) * np.sin(omega_c * t) + (vx0 / omega_c) * (1.0 - np.cos(omega_c * t))
         return np.array([[x_t, y_t, z_t]])
 
+class QuadrupoleAnalyticalReference(ReferenceSolution):
+    def __init__(
+        self,
+        z_start: float,
+        quadrupole_length: float,
+        gradient: float,
+        B_rho: float,
+        charge: int,
+    ):
+        self.z_start = z_start
+        self.quadrupole_length = quadrupole_length
+        self.gradient = gradient
+        self.B_rho = B_rho
+        self.charge = charge
+
+    @property
+    def name(self) -> str:
+        return "quadrupole_analytical"
+
+    @property
+    def reference_type(self) -> ReferenceType:
+        return ReferenceType.ANALYTICAL
+
+    @property
+    def capabilities(self) -> set:
+        return {
+            ReferenceCapability.POINTWISE_TRAJECTORY,
+            ReferenceCapability.SUMMARY_OBSERVABLES,
+        }
+
+    def resolve(self, context: ValidationContext) -> ReferenceResult:
+        diag = context.diagnostics.to_dict()
+        t = diag["time"]
+        m_kg = float(context.mass[0]) if context.mass is not None else M_P_KG
+        pos = self.position_at_time(
+            t, context.R_init, context.V_init, context.charges, mass_kg=m_kg
+        )
+        k = (self.charge * self.gradient) / self.B_rho
+
+        return ReferenceResult(
+            reference_type=self.reference_type,
+            capabilities=self.capabilities,
+            pointwise_trajectory={
+                "x": pos[:, 0],
+                "y": pos[:, 1],
+                "z": pos[:, 2],
+                "t": t,
+            },
+            summary_observables={
+                "focusing_strength": k,
+                "quadrupole_length": self.quadrupole_length,
+            },
+            metadata={
+                "z_start": self.z_start,
+                "gradient": self.gradient,
+            },
+        )
+
+    def position_at_time(
+        self,
+        t,
+        R_init,
+        V_init,
+        charges,
+        mass_kg=None,
+    ):
+        t_arr = np.atleast_1d(np.asarray(t, dtype=np.float64))
+        x0, y0, z0 = R_init[0]
+        vx0, vy0, vz0 = V_init[0]
+        q = charges[0]
+
+        if abs(vz0) < 1e-30:
+            return np.column_stack([
+                x0 + vx0 * t_arr,
+                y0 + vy0 * t_arr,
+                z0 + vz0 * t_arr,
+            ])
+
+        s = vz0 * t_arr
+        k = (q * self.gradient) / self.B_rho
+
+        if abs(k) < 1e-12:
+            return np.column_stack([
+                x0 + vx0 * t_arr,
+                y0 + vy0 * t_arr,
+                z0 + vz0 * t_arr,
+            ])
+
+        rootk = np.sqrt(abs(k))
+
+        if k > 0:
+            x = x0 * np.cos(rootk * s) + (vx0 / (vz0 * rootk)) * np.sin(rootk * s)
+            y = y0 * np.cosh(rootk * s) + (vy0 / (vz0 * rootk)) * np.sinh(rootk * s)
+        else:
+            x = x0 * np.cosh(rootk * s) + (vx0 / (vz0 * rootk)) * np.sinh(rootk * s)
+            y = y0 * np.cos(rootk * s) + (vy0 / (vz0 * rootk)) * np.sin(rootk * s)
+
+        z = z0 + vz0 * t_arr
+        return np.column_stack([x, y, z])
 
 class StubAnalyticalReference(ReferenceSolution):
     """Placeholder for undeclared analytical references."""

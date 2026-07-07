@@ -5,6 +5,7 @@ from vispy.visuals.transforms import MatrixTransform
 COL_PIPE = (0.05, 0.10, 0.15, 0.30)
 COL_PIPE_WIRE = (0.20, 0.40, 0.60, 0.80)
 COL_DIPOLE_FIELD = (0.30, 0.00, 0.80, 0.10)
+COL_QUADRUPOLE_FIELD = (0.30, 0.00, 0.80, 0.10)
 COL_DRIFT = (0.04, 0.12, 0.22, 0.12)
 COL_APERTURE = (0.00, 1.00, 0.50, 1.00)
 

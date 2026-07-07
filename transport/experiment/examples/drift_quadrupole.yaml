@@ -1,0 +1,33 @@
+experiment:
+  name: drift_quadrupole_level2
+  level: 2
+  case: drift_quadrupole
+  output_dir: transport/validation/outputs
+
+particle_source:
+  type: gaussian_beam
+  species: antiproton
+  position: [0.001, 0.001, 0.0]
+  velocity: [10000.0, 10000.0, 299492818.0]
+  n_particles: 50
+  pos_sigma: 0.001
+  vel_sigma: 10000.0
+  rng_seed: 42
+
+lattice:
+  z_start: 0.0
+  elements:
+    - {type: drift, length: 2.0, aperture: 10.0}
+    - {type: quadrupole, length: 1.0, k: 0.5, aperture: 10.0}
+
+numerical:
+  dt: 1.0e-10
+  max_steps: 1500
+  max_steps_conv: 300
+  convergence: {enabled: true, mode: self, num_points: 4, refinement_ratio: 2.0}
+  solver: boris
+
+validation:
+  pass_criteria: all_must_pass
+
+outputs: {report: true, json: true, csv: true, manifest: true, plots: true, visualization: false}

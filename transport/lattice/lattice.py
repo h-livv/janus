@@ -122,6 +122,48 @@ class Dipole(Element):
             draw_pipe_wireframe(view, z0, z1, self.aperture_radius)
             draw_aperture_rings(view, z0, z1, self.aperture_radius)
 
+class Quadrupole(Element):
+    def __init__(self, length, k, aperture_radius=None):
+        super().__init__(length, aperture_radius)
+        self.k = float(k)
+
+    def field(self, x, y, z):
+        # Linear quadrupole: Bx = G y, By = G x (G = self.k)
+        return (
+            self.k * y,
+            self.k * x,
+            np.zeros_like(z),
+        )
+
+    def draw(self, view):
+        from transport.visualization.primitives import (
+            COL_QUADRUPOLE_FIELD,
+            COL_PIPE,
+            box_at,
+            draw_aperture_rings,
+            draw_pipe_wireframe,
+            tube_segment,
+        )
+
+        z0, z1 = self.z_start, self.z_end
+        cz = 0.5 * (z0 + z1)
+        span = max(self.aperture_radius, 0.02) if self.aperture_radius is not None else 0.05
+        box_at(
+            view,
+            width=span * 4.0,
+            height=span * 4.0,
+            depth=self.L,
+            cx=0.0,
+            cy=0.0,
+            cz=cz,
+            color=COL_QUADRUPOLE_FIELD,
+            edge_color=(0.4, 0.0, 0.8, 0.5),
+        )
+        if self.aperture_radius is not None:
+            tube_segment(view, z0, z1, self.aperture_radius, COL_PIPE)
+            draw_pipe_wireframe(view, z0, z1, self.aperture_radius)
+            draw_aperture_rings(view, z0, z1, self.aperture_radius)
+
 
 class SimpleLattice:
     def __init__(self, elements, z_start=0.0):
