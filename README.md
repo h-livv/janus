@@ -12,7 +12,7 @@ Collision physics is handled by Geant4. Beamline tracking is handled by Xsuite. 
 
 ## Bombardment of a Tungsten cylinder with protons accelerated to 26 GeV
 
-<img width="500" height="400" alt="bombardment" src="https://github.com/user-attachments/assets/3d2de231-3db6-4768-8cbb-384f577c836a" />
+<img width="800" height="400" alt="janus_cropped" src="https://github.com/user-attachments/assets/36a93bff-578b-4129-a98c-88e6da6515d0" />
 
 ---
 
