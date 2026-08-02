@@ -227,11 +227,20 @@ For the Python data pipeline, install:
 pip install uproot awkward
 ```
 
-To use the data pipeline, set `"interactive": false` in interactions/config.json
+To use the data pipeline, set `"interactive": false` in `interactions/config.json`.
 
 ---
 
-### Moving an Existing Installation
+## Next: transport
+
+Once a run exists under `interactions/runs/*/simulation.root`, transport Geant4 seeds with Xsuite:
+
+```bash
+pip install -r requirements.txt
+python -m transport.main --experiment geant4_antiproton
+```
+
+See [transport_guide.md](transport_guide.md) for writing your own experiment script.
 
 If you move an existing Geant4 installation after it has been built,
 reconfigure and rebuild both Geant4 and this project. CMake embeds

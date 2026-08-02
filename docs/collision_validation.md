@@ -98,6 +98,6 @@ While Phases 1-3 assess the mathematical validity of the engine, Phase 4 provide
 
 ---
 
-#### By using this framework to validate the high-energy physics engine of Janus, we can establish confidence that it is physically valid, reliable, and is ready for further use in downstream applications - the transport pipeline and optimization studies.
+#### By using this framework to validate the high-energy physics engine of Janus, we can establish confidence that it is physically valid, reliable, and is ready for further use in downstream applications — the Xsuite transport pipeline and optimization studies.
 
----
+After collision validation passes, define and run a transport experiment using [transport_guide.md](transport_guide.md).

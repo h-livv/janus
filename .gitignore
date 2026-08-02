@@ -1,53 +1,28 @@
 .venv/
-
-build/
-
-outputs/
-
-temp/
-
-reference_docs/
-
-interactions/runs/
-
-legacy_transport_optimization/
-
-logs/
-
-stitch_dataset.py
-
-transport/validaion/outputs/
-
-validation_outputs/
-
+.vscode/
 .cursor/
+.pytest_cache/
 
-outputs/
-
-*.hdf5
-
-*.csv
-
-*.root
-
-*.out
-
-*.log
-
-*.npz
-
+# Build / Geant4
+build/
 CMakeCache.txt
-
 CMakeFiles/
-
 Makefile
-
 cmake_install.cmake
-
 compile_commands.json
 
+# Runtime outputs
+temp/
+outputs/
+interactions/runs/
+transport/outputs/
+validation_outputs/
 __pycache__/
 
-__pycache__
-
-.vscode/
+# Data artifacts
+*.hdf5
+*.csv
+*.root
+*.out
+*.log
+*.npz

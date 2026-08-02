@@ -1,10 +1,19 @@
+"""CLI entry point: select an experiment module and run it."""
+
 import argparse
+import importlib
 import os
 import sys
+from pathlib import Path
 
-DEFAULT_EXPERIMENT = os.path.join(
-    os.path.dirname(__file__), "experiment", "examples", "dipole.yaml"
-)
+
+def _list_experiments():
+    experiments_dir = Path(__file__).resolve().parent / "experiments"
+    return sorted(
+        p.stem
+        for p in experiments_dir.glob("*.py")
+        if p.stem != "__init__" and not p.stem.startswith("_")
+    )
 
 
 def main():
@@ -12,33 +21,19 @@ def main():
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
-    parser = argparse.ArgumentParser(description="Run a transport validation experiment.")
+    names = _list_experiments()
+    parser = argparse.ArgumentParser(description="Run Xsuite-backed particle transport.")
     parser.add_argument(
         "--experiment",
-        default=DEFAULT_EXPERIMENT,
-        help="Path to experiment YAML file (default: dipole example)",
+        default="drift",
+        choices=names,
+        help="Experiment module under transport/experiments/ (default: drift)",
     )
     args = parser.parse_args()
 
-    from transport.experiment.loader import load_experiment
-    experiment = load_experiment(args.experiment)
-
-    if experiment.outputs.visualization:
-        from transport.pipeline import run_visualization
-        print(f"[Main] Visualization enabled for: {experiment.name} ({args.experiment})")
-        run_visualization(experiment)
-        return
-
-    from transport.pipeline import run_experiment
-
-    print(f"[Main] Running experiment: {experiment.name} ({args.experiment})")
-    passed, run_outputs_dir = run_experiment(experiment)
-
-    if passed:
-        print("\nSTATUS: PASS")
-        sys.exit(0)
-    print("\nSTATUS: FAIL")
-    sys.exit(1)
+    print(f"[Main] Running transport: {args.experiment}")
+    module = importlib.import_module(f"transport.experiments.{args.experiment}")
+    module.main()
 
 
 if __name__ == "__main__":

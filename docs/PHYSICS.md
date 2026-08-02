@@ -81,13 +81,15 @@ $$
 q(\vec{E}+\vec{v}\times\vec{B})
 $$
 
-For the current Janus transport system,
+For Janus beamline transport, particle advancement is performed by **Xsuite** (`xtrack`/`xpart`). Janus converts Geant4 seed phase space into Xsuite coordinates; callers build `xtrack.Line` objects with native Xsuite elements. Electromagnetic field models inside supported elements are those provided by Xsuite.
+
+In the current configuration,
 
 $$
 \vec{E}=0
 $$
 
-so transport is governed entirely by magnetic fields.
+so transport is governed by magnetic elements (drift, quadrupole, bend). Magnetic horn elements are not yet wired through an Xsuite field-map adapter.
 
 
 # 1. Target Collision
@@ -168,9 +170,15 @@ $$
 
 # 2. Transport
 
-The transport section propagates particles through a sequence of magnetic elements.
+Beamline transport is delegated to **Xsuite**. Janus owns only:
 
-Each element modifies the beam phase space according to its magnetic field structure.
+* Geant4 ROOT → NPZ seed extraction (`transport/io.py`)
+* Conversion of seed arrays into `xpart.Particles` (`transport/xsuite.py`)
+* Packaging of transported NPZ output for optimization
+
+Beamlines are constructed in Python with native Xsuite elements (`xt.Drift`, `xt.Quadrupole`, `xt.Bend`, …). Particle coordinates use the Xsuite convention: transverse positions `x`, `y` [m]; normalized momenta `px`, `py`; longitudinal phase `zeta` (set to 0 at injection); momentum deviation `delta`.
+
+The physical models below describe the accelerator elements relevant to antimatter collection. Their tracking maps are provided by Xsuite, not by Janus.
 
 
 
@@ -442,24 +450,20 @@ is the sextupole strength.
 
 # Current Scope
 
-Janus currently models:
+**Implemented today**
 
-* Target production
-* Magnetic horn collection
-* Drift transport
-* Dipole momentum selection
-* Quadrupole focusing
-* Sextupole correction
+* Target production (Geant4: `engine/` + `interactions/`)
+* Collision-stage validation (`interactions/validation/`)
+* NPZ seed extraction from Geant4 ROOT output (`transport/io.py`)
+* Xsuite-backed drift, quadrupole, and bend transport via Python experiment scripts
+* Automatic post-transport diagnostics (`transport/analysis/`)
 
-Future versions will add:
+**Not yet implemented**
 
-* Stochastic cooling
-* Electron cooling
-* Deceleration stages
-* Trap injection
-* Penning traps
-* Antihydrogen formation
-* Storage and confinement
+* Magnetic horn as an Xsuite field-map element
+* Cooling, deceleration, trapping, and global optimization
+
+For how to define and run a transport study, see [transport_guide.md](transport_guide.md).
 
 
 # Philosophy
