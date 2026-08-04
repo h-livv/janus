@@ -182,6 +182,8 @@ Every successful run with `write_npz=True` writes:
 ```text
 transport/outputs/run_<timestamp>/
 ├── transported_particles.npz
+├── metrics.json
+├── provenance.json
 ├── beam_xy.png
 ├── phase_space.png
 ├── momentum_histogram.png
@@ -192,13 +194,35 @@ transport/outputs/run_<timestamp>/
 | File | Contents |
 |------|----------|
 | `transported_particles.npz` | Final Xsuite coordinates, alive mask, reference `p0c`, metadata |
+| `metrics.json` | Structured observables (`transmission`, RMS sizes, momentum spread, etc.) |
+| `provenance.json` | Run ID, parameters, fingerprints, artifact paths |
 | `beam_xy.png` | Transverse profile \(x\)–\(y\) |
 | `phase_space.png` | Horizontal phase space \(x\)–\(p_x/p_0\) |
 | `momentum_histogram.png` | Absolute momentum spectrum |
 | `beamline.png` | Static element schematic |
-| `summary.txt` | Species, counts, transmission, mean/std momentum, RMS sizes |
+| `summary.txt` | Human-readable summary from `TransportMetrics` |
 
-Diagnostics are produced automatically by `transport.analysis` from the NPZ.
+Diagnostics are produced automatically by `transport.analysis`.
+
+---
+
+## Computational studies
+
+Parameter sweeps use `transport/studies/`:
+
+```text
+Study → Parameter Generator → Experiment Factory → pipeline.run(...)
+```
+
+The Study orchestrates many runs and writes `study_results.csv`. The Experiment Factory remains responsible for building `xt.Line` and calling `run(...)`.
+
+Example:
+
+```bash
+python -m transport.experiments.study_drift_length
+```
+
+Study CSV rows reference per-run `metrics.json` and `provenance.json` paths.
 
 ---
 

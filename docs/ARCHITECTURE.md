@@ -10,8 +10,9 @@ Janus is an orchestration layer around two external engines:
 |-------|-------|------------|
 | Particle production | Geant4 (`engine/`, `interactions/`) | Configure, run, validate, extract seeds |
 | Beam transport | Xsuite (`xpart` / `xtrack`) | Convert seeds, track caller-built `xt.Line`, write NPZ |
-| Diagnostics | Janus (`transport/analysis/`) | Plots + summary from transported NPZ |
-| Optimization | Planned | Consume transported NPZ |
+| Diagnostics | Janus (`transport/analysis/`) | Metrics, plots + summary from transport outputs |
+| Studies | Janus (`transport/studies/`) | Parameter sweeps, CSV aggregation |
+| Optimization | Planned | Consume study CSV + metrics |
 
 There is no custom Boris integrator, no YAML transport config, and no interactive visualization in the transport path.
 
@@ -34,7 +35,7 @@ transport/pipeline.run(...)      (filter → convert → track → write)
 ↓
 Xsuite tracking
 ↓
-transported_particles.npz + analysis products
+transported_particles.npz + metrics + provenance + analysis products
 ```
 
 ---
@@ -58,7 +59,9 @@ janus/
 │   ├── pipeline.py             # Orchestration only
 │   ├── io.py                   # ROOT → NPZ seeds (no experiment cuts)
 │   ├── xsuite.py               # Seeds → Particles, track, write NPZ
-│   ├── analysis/               # NPZ diagnostics
+│   ├── analysis/               # Metrics + NPZ diagnostics
+│   ├── studies/                # Parameter sweeps + CSV export
+│   ├── provenance.py           # Per-run provenance.json
 │   └── experiments/            # One script per study (params live here)
 ├── tests/transport/
 ├── docs/
@@ -117,12 +120,36 @@ Cached beside each run as `merged_seeds_cache_v6.npz` (+ `merged_seeds_manifest_
 ```text
 transport/outputs/run_<timestamp>/
 ├── transported_particles.npz
+├── metrics.json
+├── provenance.json
 ├── beam_xy.png
 ├── phase_space.png
 ├── momentum_histogram.png
 ├── beamline.png
 └── summary.txt
 ```
+
+Study outputs aggregate rows in `study_results.csv` beside per-run directories.
+
+### Frozen public contracts
+
+These interfaces are stable extension points for research infrastructure:
+
+| Contract | Owner | Notes |
+|----------|-------|-------|
+| `SeedArrays` | `transport/io.py` | Geant4 seed boundary |
+| `pipeline.run(...)` | `transport/pipeline.py` | Single-run orchestration only |
+| `TransportResult` | `transport/xsuite.py` | In-memory metrics input |
+| `TransportMetrics` | `transport/analysis/metrics.py` | Structured observables |
+| `transported_particles.npz` keys | `transport/xsuite.py` | Persistence schema |
+| Experiment scripts | `transport/experiments/` | Single source of scientific parameters |
+| Study runner | `transport/studies/runner.py` | Orchestration via Parameter Generator + Experiment Factory |
+
+Components that should remain unchanged for research infrastructure unless a new scientific requirement forces it:
+
+- `engine/` Geant4 physics
+- `interactions/validation/` collision validation
+- Xsuite element physics and tracking internals
 
 NPZ fields include final `x`, `px`, `y`, `py`, `zeta`, `delta`, `state`, `alive_mask`, `at_element`, `p0c_eV`, `mass0_eV`, `q0`, `start_z`, and `metadata_json` (species, beamline elements, source path, engine `"xsuite"`).
 

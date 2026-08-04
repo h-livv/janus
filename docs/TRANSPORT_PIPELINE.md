@@ -409,6 +409,8 @@ Written by `write_transport_output` to:
 
 Default run directory: `transport/outputs/run_<YYYYMMDD_HHMMSS>/`.
 
+Per-run artifacts also include `metrics.json` and `provenance.json` (see sections 11–12).
+
 ### Arrays in transported NPZ
 
 | Key | Meaning |
@@ -434,17 +436,31 @@ Default run directory: `transport/outputs/run_<YYYYMMDD_HHMMSS>/`.
 
 ---
 
-## 11. Analysis Pipeline
+## 11. Metrics and Analysis Pipeline
 
 Triggered automatically when `write_npz=True` (default):
 
 ```text
 write_transport_output(...)
 ↓
-transport.analysis.analyze(npz_path)
+compute_transport_metrics(TransportResult)
+↓
+metrics.json + provenance.json
+↓
+transport.analysis.analyze(npz_path, metrics=...)
 ```
 
-All products are derived **only** from the transported NPZ — tracking is not re-run (`analysis/plots.py`).
+Metrics are defined over in-memory `TransportResult`; NPZ is persistence. Offline recomputation uses `metrics_from_npz(...)`.
+
+| Output | Source |
+|--------|--------|
+| `metrics.json` | `TransportMetrics` from transport result |
+| `provenance.json` | Run parameters, fingerprints, artifact paths |
+| Plots + `summary.txt` | Presentation layer from metrics and NPZ arrays |
+
+## 12. Analysis products
+
+All plot products are derived from the transported NPZ — tracking is not re-run (`analysis/plots.py`). Summary text is generated from `TransportMetrics`, not independent formulas.
 
 | Output | Function | Source fields |
 |--------|----------|---------------|

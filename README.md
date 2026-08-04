@@ -33,10 +33,10 @@ Every transport study is a plain Python script under `transport/experiments/`. T
   transport/experiments/*.py  →  scientific params + xt.Line + run(...)
        │
        ▼
-  Xsuite tracking → transported_particles.npz + diagnostics
+  Xsuite tracking → transported_particles.npz + metrics + provenance + diagnostics
        │
        ▼
-  Optimization (planned)
+  Studies / optimization (study CSV + metrics)
 ```
 
 ---
@@ -69,7 +69,7 @@ python -m transport.main --experiment geant4_antiproton
 
 To add your own study, create `transport/experiments/my_study.py` with a `main()` that builds an `xtrack.Line`, sets every scientific parameter as plain variables, and calls `run(...)`. Full instructions: [docs/transport_guide.md](docs/transport_guide.md).
 
-Outputs land in `transport/outputs/run_<timestamp>/` (`transported_particles.npz`, plots, `summary.txt`).
+Outputs land in `transport/outputs/run_<timestamp>/` (`transported_particles.npz`, `metrics.json`, `provenance.json`, plots, `summary.txt`).
 
 ---
 
@@ -84,6 +84,9 @@ Outputs land in `transport/outputs/run_<timestamp>/` (`transported_particles.npz
 | Xsuite transport (drift, quadrupole, bend) | Implemented |
 | Python experiment scripts (single source of truth) | Implemented (`transport/experiments/`) |
 | Automatic NPZ diagnostics | Implemented (`transport/analysis/`) |
+| Structured metrics API | Implemented (`transport/analysis/metrics.py`) |
+| Study framework (CSV) | Implemented (`transport/studies/`) |
+| Per-run provenance | Implemented (`transport/provenance.py`) |
 | Magnetic horn via Xsuite field map | Not yet |
 | Cooling / trapping / optimization | Planned |
 
@@ -128,7 +131,9 @@ janus/
 │   ├── pipeline.py             # Orchestration only (no scientific defaults)
 │   ├── io.py                   # ROOT → NPZ seeds (load only)
 │   ├── xsuite.py               # Particles conversion + tracking + NPZ write
-│   ├── analysis/               # Plots + summary from NPZ
+│   ├── analysis/               # Metrics + plots + summary
+│   ├── studies/                # Parameter sweeps + CSV export
+│   ├── provenance.py           # Per-run provenance.json
 │   └── experiments/            # One Python script per study (params live here)
 ├── tests/transport/
 └── requirements.txt

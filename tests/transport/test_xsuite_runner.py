@@ -96,4 +96,6 @@ def test_pipeline_file_seeds_integration(tmp_path):
         assert "metadata_json" in data
     out = Path(out_dir)
     assert (out / "summary.txt").exists()
+    assert (out / "metrics.json").exists()
+    assert (out / "provenance.json").exists()
     assert (out / "beam_xy.png").exists()

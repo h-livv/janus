@@ -42,6 +42,7 @@ def test_analyze_writes_all_diagnostics(tmp_path):
 
     outs = analyze(npz)
     for key, filename in [
+        ("metrics", "metrics.json"),
         ("beam_xy", "beam_xy.png"),
         ("phase_space", "phase_space.png"),
         ("momentum_histogram", "momentum_histogram.png"),
@@ -80,4 +81,6 @@ def test_pipeline_auto_runs_analysis(tmp_path):
     assert (out / "momentum_histogram.png").exists()
     assert (out / "beamline.png").exists()
     assert (out / "summary.txt").exists()
+    assert (out / "metrics.json").exists()
+    assert (out / "provenance.json").exists()
     assert result.output_path is not None

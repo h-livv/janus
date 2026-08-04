@@ -1,7 +1,7 @@
 """Lightweight diagnostics for transported NPZ output.
 
-All plots and summaries are derived from the NPZ written by the transport
-pipeline. No tracking is re-run.
+All plots and summaries are derived from transport outputs. Metrics are computed
+from in-memory results in the pipeline; offline analysis uses the NPZ adapter.
 """
 
 from __future__ import annotations
@@ -15,6 +15,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from transport.analysis.metrics import TransportMetrics, metrics_from_npz, write_metrics
+
 
 def _load(npz_path: str | Path):
     path = Path(npz_path)
@@ -26,13 +28,6 @@ def _load(npz_path: str | Path):
 def _alive(data):
     mask = np.asarray(data["alive_mask"], dtype=bool)
     return mask
-
-
-def _momentum_gev(data):
-    """Absolute momentum [GeV/c] from stored p0c and delta."""
-    p0c_eV = float(np.asarray(data["p0c_eV"]))
-    delta = np.asarray(data["delta"], dtype=np.float64)
-    return p0c_eV * (1.0 + delta) / 1.0e9
 
 
 def plot_beam_xy(npz_path: str | Path, output_path: str | Path | None = None) -> str:
@@ -82,7 +77,11 @@ def plot_momentum_histogram(
     """Histogram of absolute particle momentum."""
     data, _, path = _load(npz_path)
     alive = _alive(data)
-    p_gev = _momentum_gev(data)[alive]
+    metrics = metrics_from_npz(path)
+    p0c_eV = metrics.p0c_gevc * 1.0e9
+    delta = np.asarray(data["delta"], dtype=np.float64)
+    p_gev = p0c_eV * (1.0 + delta) / 1.0e9
+    p_gev = p_gev[alive]
 
     out = Path(output_path) if output_path else path.with_name("momentum_histogram.png")
     fig, ax = plt.subplots(figsize=(7, 5))
@@ -153,58 +152,57 @@ def plot_beamline(npz_path: str | Path, output_path: str | Path | None = None) -
     return str(out)
 
 
-def write_summary(npz_path: str | Path, output_path: str | Path | None = None) -> str:
-    """Write a human-readable transport summary beside the NPZ."""
-    data, meta, path = _load(npz_path)
-    alive = _alive(data)
-    x = np.asarray(data["x"], dtype=np.float64)
-    y = np.asarray(data["y"], dtype=np.float64)
-    p_gev = _momentum_gev(data)
-
-    n_generated = int(len(x))
-    n_transported = int(np.sum(alive))
-    transmission = (n_transported / n_generated) if n_generated else 0.0
-
-    if n_transported:
-        mean_p = float(np.mean(p_gev[alive]))
-        std_p = float(np.std(p_gev[alive]))
-        rms_x = float(np.sqrt(np.mean(x[alive] ** 2)))
-        rms_y = float(np.sqrt(np.mean(y[alive] ** 2)))
+def write_summary(
+    metrics: TransportMetrics,
+    output_path: str | Path | None = None,
+    npz_path: str | Path | None = None,
+) -> str:
+    """Write a human-readable transport summary from structured metrics."""
+    if output_path is None and npz_path is not None:
+        out = Path(npz_path).with_name("summary.txt")
     else:
-        mean_p = std_p = rms_x = rms_y = float("nan")
+        out = Path(output_path)
 
-    out = Path(output_path) if output_path else path.with_name("summary.txt")
     lines = [
         "Transport summary",
         "=================",
-        f"Experiment:              {meta.get('experiment_name', path.stem)}",
-        f"Particle species:        {meta.get('species', 'unknown')}",
-        f"Generated particles:     {n_generated}",
-        f"Transported particles:   {n_transported}",
-        f"Transmission efficiency: {transmission:.4f}",
-        f"Mean momentum:           {mean_p:.6g} GeV/c",
-        f"Momentum std. dev.:      {std_p:.6g} GeV/c",
-        f"RMS beam size x:         {rms_x:.6g} m",
-        f"RMS beam size y:         {rms_y:.6g} m",
-        f"Reference p0c:           {float(np.asarray(data['p0c_eV'])) / 1e9:.6g} GeV/c",
-        f"Source:                  {meta.get('source_path')}",
-        f"Beamline hash:           {meta.get('beamline_hash')}",
+        f"Experiment:              {metrics.experiment_name}",
+        f"Particle species:        {metrics.species}",
+        f"Generated particles:     {metrics.generated_count}",
+        f"Transported particles:   {metrics.transported_count}",
+        f"Transmission efficiency: {metrics.transmission:.4f}",
+        f"Mean momentum:           {metrics.mean_momentum_gevc:.6g} GeV/c",
+        f"Momentum std. dev.:      {metrics.momentum_spread_gevc:.6g} GeV/c",
+        f"RMS beam size x:         {metrics.rms_x_m:.6g} m",
+        f"RMS beam size y:         {metrics.rms_y_m:.6g} m",
+        f"Reference p0c:           {metrics.p0c_gevc:.6g} GeV/c",
+        f"Source:                  {metrics.source_path}",
+        f"Beamline hash:           {metrics.beamline_hash}",
     ]
     out.write_text("\n".join(lines) + "\n")
     return str(out)
 
 
-def analyze(npz_path: str | Path) -> dict[str, str]:
-    """Generate all diagnostics next to a transported NPZ file."""
+def analyze(
+    npz_path: str | Path,
+    metrics: TransportMetrics | None = None,
+) -> dict[str, str]:
+    """Generate metrics, plots, and summary next to a transported NPZ file."""
     path = Path(npz_path)
     if not path.exists():
         raise FileNotFoundError(f"Transported NPZ not found: {path}")
 
+    if metrics is None:
+        metrics = metrics_from_npz(path)
+
+    metrics_path = write_metrics(metrics, path.parent)
+
     outputs = {
+        "metrics": metrics_path,
         "beam_xy": plot_beam_xy(path),
         "phase_space": plot_phase_space(path),
         "momentum_histogram": plot_momentum_histogram(path),
         "beamline": plot_beamline(path),
-        "summary": write_summary(path),
+        "summary": write_summary(metrics, npz_path=path),
     }
     return outputs
