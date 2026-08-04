@@ -2,6 +2,8 @@
 
 **Current status:** Transport tracking is performed by **Xsuite**. Janus validates only its integration boundaries and automatic diagnostics — not Xsuite element physics.
 
+There is no YAML transport config and no Janus-owned tracking integrator to validate. Scientific parameters belong in experiment scripts; tests exercise the load → convert → track → write → analyze path with explicit arguments.
+
 ## What Janus tests
 
 1. NPZ seed loading (`transport/io.py`)
@@ -18,7 +20,7 @@ pytest tests/transport/ -v
 
 | Test module | Validates |
 |-------------|-----------|
-| `test_npz_loader.py` | Seed NPZ schema |
+| `test_npz_loader.py` | Seed NPZ schema via `load_seed_npz` |
 | `test_xsuite_particles.py` | Coordinate conversion |
 | `test_xsuite_beamline.py` | Direct `xtrack.Line` construction |
 | `test_xsuite_runner.py` | Tracking smoke + pipeline integration |
@@ -40,7 +42,14 @@ Expect under `transport/outputs/run_<timestamp>/`:
 - `beam_xy.png`, `phase_space.png`, `momentum_histogram.png`, `beamline.png`
 - `summary.txt`
 
+Seed-extraction logs (normally quiet):
+
+```bash
+DATAIO_VERBOSE=1 python -m transport.main --experiment geant4_antiproton
+```
+
 ## Writing a new study
 
 Transport configurations are Python experiment scripts, not YAML files.
+All scientific parameters must be defined in that script.
 See [transport_guide.md](transport_guide.md).

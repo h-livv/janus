@@ -1,61 +1,80 @@
-# Generalized Validation Framework for Monte Carlo Physics Engines
+# Collision Validation
 
-High-energy physics Monte Carlo transport engines such as Geant4 simulate complex stochastic interaction that are inherently difficult to benchmark. To ensure downstream data integrity, a simulation pipeline requires a strict, autonomous, and physically rigorous validation architecture.
+High-energy Monte Carlo engines such as Geant4 are stochastic and hard to benchmark by eye. Janus therefore validates collision output **before** transport consumes it.
 
-This document outlines a generalized 4-phase validation framework designed to evaluate any physics engine. The framework systematically verifies fundamental mathematical invariants, discrete quantum bounds, macroscopic statistical limits, and realistic distributions before allowing data to proceed.
-
----
-
-## The Generalized Extraction Architecture
-
-To decouple validation logic from the inner workings of the transport engine, the architecture relies on an absolute separation of tracking points into two independent data streams:
-
-1. **Terminal State Node (The "Validation" Node):**
-   Captures the system exclusively at the terminal boundaries of an interaction (e.g., immediately post-collision). It records the absolute pre-collision initial state and the final fragmented asymptotic state. This node must be dynamically aware, capturing instantaneous properties like sampled isotope variations and specific beam parameters per event.
-   
-2. **Birth State Node (The "Seed" Node):**
-   A global tracking hook that captures the fundamental birth parameters ($t=0$ position, momentum, energy, and PID) of every secondary particle generated anywhere in the target geometry, enabling spatial and kinematic distribution analyses.
+This document describes the **implemented** Janus collision validation: what each script checks, which ROOT files it needs, and how to run it.
 
 ---
 
-## Phase 1: Kinematic Invariant Evaluator 
+## Two data streams
 
-**Objective:** Verify the absolute conservation of relativistic 4-momentum ($\Delta E, \Delta \vec{p}$).
+Geant4 writes two ROOT files per run (staged under `temp/`, then packaged into `interactions/runs/<run_name>/`):
 
-**Framework Logic:**
-* **Energy Tracking:** A physics engine must conserve total energy. The pipeline performs a summation of the final state energies ($\sum E_{out}$) and momenta ($\sum \vec{p}_{out}$) for all terminal fragments and compares them against the initial state collision kinematics.
-* **Implementation Standard:** If the invariant error exceeds a predefined microscopic tolerance ($\epsilon$), the pipeline must trigger a fatal exception. 
+| File | Tree | Role |
+|------|------|------|
+| `validation.root` | `Validation` | Per-event initial / outgoing kinematics for conservation checks |
+| `simulation.root` | `Seeds` | Secondary kinematics for transport (and Phase 4 spatial plots) |
 
-> **NOTE**: <br>
-> Specifically for Janus, it was observed that heavy fragments of the target itself were contaminating the momentum conservation check. The fix was:<br>
-> If the error is sub-threshold but non-zero, the framework mathematically absorbs the residual energy and momentum into the heaviest target fragment, maintaining exact 4-momentum preservation.
+### Seed recording mode
 
----
+`interactions/config.json` → `output.record_mode`:
 
-## Phase 2: Quantum Number Gatekeeper
+| Mode | Meaning |
+|------|---------|
+| `"Hit"` (**default**) | Record kinematics when a particle crosses Target → Chamber |
+| `"Birth"` | Record \(t=0\) birth kinematics of secondaries |
 
-**Objective:** Enforce the strict conservation of discrete quantum invariants, specifically total electrical Charge ($Q$) and Baryon Number ($B$).
-
-**Framework Logic:**
-* **Dynamic Parameter Deduction:** The framework deduces the exact target isotope dynamically. By evaluating the collective $Q$ and $B$ values of the outgoing fragments, it calculates the dynamic initial bounds ($Q_{initial} = Q_{target} + Q_{beam}$).
-* **Implementation Standard:** The script iterates over the final state tensor, decodes particle IDs into their discrete quantum constituents, and verifies the sum exactly matches the dynamic initial bounds. Any discrete violation represents a catastrophic mathematical breakdown in the tracking engine.
+Transport and Phase 4 both read `Seeds`. With the default Hit mode, those are chamber-entry states, not necessarily production vertices.
 
 ---
 
-## Phase 3: Statistical Benchmark
+## How to run
 
-**Objective:** Validate the statistical and macroscopic likelihood of the generated event batch, preventing mathematically conserved but physically impossible scenarios (e.g., unphysical explosions of matter).
+From the repository root, after at least one completed collision run:
 
-**Framework Logic:**
-* **Yield Caps:** The pipeline evaluates the macroscopic ratios of rare particles. The framework compares rare-particle yields against expected theoretical or experimental values and flags significant deviations.
-* **Multiplicity Bounds:** Computes the mean fractional generation of standard cascade particles (such as charged pions in hadronic showers). 
-* **Implementation Standard:** By establishing predefined boundaries for mean particle generation per inelastic event, the pipeline autonomously catches severe algorithmic regressions in the underlying physics models.
+```bash
+# Phases 1–3: conservation / quantum / sanity (validation.root)
+python interactions/validation/validate.py
+# or: python interactions/validation/validate.py path/to/validation.root
+
+# Phase 4: phenomenological plots (needs both ROOT files)
+python interactions/validation/physical_validation.py
+# or: python interactions/validation/physical_validation.py path/to/validation.root path/to/simulation.root
+```
+
+If paths are omitted, both scripts pick the newest directory under `interactions/runs/run_*`.
+
+**Extra Python deps** (not all are in `requirements.txt`):
+
+```bash
+pip install uproot awkward particle matplotlib
+```
 
 ---
 
-## Output for phases 1-3:
+## Phases 1–3 — `validate.py`
 
-The physics engine was validated using 100,000 events, and the following output was generated in the terminal:
+Reads **`validation.root`** only. Fails hard if kinematic or quantum conservation is violated beyond tolerance.
+
+### Phase 1: Kinematic invariants
+
+Compares total outgoing energy and momentum to the recorded initial state. If \(|\Delta E|\) or \(|\Delta p|\) exceeds `--epsilon` (default 2 MeV), the suite aborts.
+
+> **Janus note:** Heavy target fragments can leave a sub-threshold residual. The engine absorbs that residual into the heaviest target fragment so 4-momentum is preserved exactly for the check.
+
+### Phase 2: Quantum numbers
+
+Checks event-by-event conservation of charge \(Q\) and baryon number \(B\), including dynamic target isotope deduction from the fragment set.
+
+### Phase 3: Statistical sanity
+
+Reports macroscopic counters for human inspection — it does **not** compare yields to theoretical caps or fail on multiplicity bounds:
+
+- Total antinucleons generated
+- Global baryon conservation check
+- Mean charged pions per inelastic event
+
+### Example terminal output (100k events)
 
 ```
 ========== JANUS VALIDATION REPORT ==========
@@ -68,7 +87,7 @@ Phase 2 Passed: Quantum Number Conservation Verified.
   -> Mean Event Baryon (B): 184.9 (Mean Expected: 184.9)
 Phase 3 Sanity Checks Passed:
   -> Total Antinucleons Generated: 430
-  -> Global Baryon Conservation Verified.   
+  -> Global Baryon Conservation Verified.
   -> Mean Charged Pions per Inelastic Event: 4.0194
 
 [+] Validation Suite Passed Successfully. Transport simulation may proceed.
@@ -76,28 +95,37 @@ Phase 3 Sanity Checks Passed:
 
 ---
 
-## Phase 4: Emergent Behaviour Validation
+## Phase 4 — `physical_validation.py`
 
-**Objective:** Verifies that the generated particle fields mimic realistic high-energy interactions by plotting and analyzing their macroscopic shapes.
+Reads **both** `validation.root` and `simulation.root`. Produces diagnostic plots for visual review — there is **no** automated pass/fail against exponential fits or distribution templates.
 
-**Framework Logic:**
-While Phases 1-3 assess the mathematical validity of the engine, Phase 4 provides phenomenological validation. A generalized framework achieves this through targeted observable plotting:
-1. **Kinematic Jetting ($p_T$ vs $p_L$):** Plots the 2D density distribution of transverse vs. longitudinal momentum. It ensures that high-energy collisions correctly produce forward-peaked momentum jets ($p_L \gg p_T$) characteristic of relativistic beam dynamics.
-2. **Particle Multiplicity:** Verifies that the histogram of generated fragments per event shapes into a physical Poisson or Negative Binomial Distribution (NBD), rather than a uniform or anomalous spread.
-3. **Spectroscopic Evaporation:** Evaluates scalar kinetic energy spectra (e.g., neutron distributions). It confirms the presence of dual-physical phenomena: the low-energy isotropic evaporation spike and the high-energy forward cascade tail.
-4. **Spatial Decay Profiles:** Extracts spatial interaction vertices ($\vec{x}, \vec{y}, \vec{z}$) and demonstrates the interactions follow an exponential decay curve $\exp(-x/\lambda)$ through the target volume, conforming to the theoretical mean-free-path of the material.
+Outputs go to:
+
+```text
+interactions/validation/validation_outputs/<run_name>/
+├── phase4_pT_vs_pL.png
+├── phase4_multiplicity.png
+├── phase4_energy_spectra.png
+└── phase4_vertex_z.png
+```
+
+| Plot | What it shows |
+|------|----------------|
+| \(p_T\) vs \(p_L\) | Charged-pion transverse vs longitudinal momentum (2D density) |
+| Multiplicity | Charged-pion multiplicity per inelastic event |
+| Energy spectra | Kinetic-energy spectra (e.g. neutrons) |
+| Vertex \(z\) | Histogram of seed \(z\) positions from `Seeds` |
+
+Illustrative snapshots (from an earlier 100k-event study) are also kept under `docs/assets/collision_val/` for the README / docs gallery; live runs write the `phase4_*.png` names above.
 
 ---
 
-## Plots generated for 100,000 particles using phase 4:
+## Relation to transport
 
-<img src="assets/collision_val/pT_vs_pL.png" alt="pT_vspL" width="400">
-<img src="assets/collision_val/multiplicity.png" alt="particle_multiplicity" width="400">
-<img src="assets/collision_val/energy_spectra.png" alt="spectroscopic_evaporation" width="400"> 
-<img src="assets/collision_val/vertex_distribution.png" alt="spatial_decay_profiles" width="400">
+After Phases 1–3 pass (and Phase 4 looks sensible), define and run a transport experiment:
 
----
+```bash
+python -m transport.main --experiment geant4_antiproton
+```
 
-#### By using this framework to validate the high-energy physics engine of Janus, we can establish confidence that it is physically valid, reliable, and is ready for further use in downstream applications — the Xsuite transport pipeline and optimization studies.
-
-After collision validation passes, define and run a transport experiment using [transport_guide.md](transport_guide.md).
+Transport reads **`simulation.root` / `Seeds`** only (via `transport/io.py`). Momentum and species selection are experiment parameters — see [transport_guide.md](transport_guide.md).

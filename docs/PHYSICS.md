@@ -108,7 +108,7 @@ The collision produces secondary particles through hadronic interactions:
 * hyperons
 * other secondaries
 
-The target stage provides the initial phase-space distribution used by the transport lattice.
+The target stage provides the initial phase-space distribution consumed by transport experiments (`xtrack.Line`). With the default collision `record_mode` of `"Hit"`, transport seeds are Target→Chamber boundary states; `"Birth"` records \(t=0\) production kinematics instead.
 
 ## Governing Equations
 
@@ -172,13 +172,14 @@ $$
 
 Beamline transport is delegated to **Xsuite**. Janus owns only:
 
-* Geant4 ROOT → NPZ seed extraction (`transport/io.py`)
+* Geant4 ROOT → NPZ seed extraction (`transport/io.py`) — load only; no experiment cuts
 * Conversion of seed arrays into `xpart.Particles` (`transport/xsuite.py`)
 * Packaging of transported NPZ output for optimization
+* Experiment scripts under `transport/experiments/` that define every scientific parameter
 
-Beamlines are constructed in Python with native Xsuite elements (`xt.Drift`, `xt.Quadrupole`, `xt.Bend`, …). Particle coordinates use the Xsuite convention: transverse positions `x`, `y` [m]; normalized momenta `px`, `py`; longitudinal phase `zeta` (set to 0 at injection); momentum deviation `delta`.
+Beamlines are constructed in Python with native Xsuite elements (`xt.Drift`, `xt.Quadrupole`, `xt.Bend`, …). Particle coordinates use the Xsuite convention: transverse positions `x`, `y` [m]; normalized momenta `px`, `py`; longitudinal phase `zeta` (set to 0 at injection); momentum deviation `delta`. Reference mass uses `xt.PROTON_MASS_EV` for both proton and antiproton ensembles.
 
-The physical models below describe the accelerator elements relevant to antimatter collection. Their tracking maps are provided by Xsuite, not by Janus.
+The physical models below describe the accelerator elements relevant to antimatter collection. Their tracking maps are provided by Xsuite, not by Janus. Horn and higher-order correctors remain conceptual until wired through Xsuite field-map elements.
 
 
 
@@ -470,4 +471,4 @@ For how to define and run a transport study, see [transport_guide.md](transport_
 
 Janus is not intended to reproduce every microscopic accelerator effect.
 
-Instead, it seeks to capture the dominant beam-physics mechanisms that determine antimatter yield, transport efficiency, momentum selection, and lattice optimization while remaining computationally tractable for large-scale parameter studies and optimization workflows.
+Instead, it seeks to capture the dominant beam-physics mechanisms that determine antimatter yield, transport efficiency, momentum selection, and beamline optimization while remaining computationally tractable for large-scale parameter studies and optimization workflows.

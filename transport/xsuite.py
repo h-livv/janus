@@ -54,12 +54,18 @@ def _resolve_momenta_mevc(seeds: SeedArrays, species: str) -> np.ndarray:
 
 def seeds_to_xparticles(
     seeds: SeedArrays,
-    species: str = "antiproton",
-    charge_filter: str = "any",
+    *,
+    species: str,
+    charge_filter: str,
     p0c_eV: Optional[float] = None,
     n_particles: Optional[int] = None,
 ) -> tuple[xp.Particles, ParticleConversionMeta]:
-    """Convert validated seed arrays into xpart.Particles for Xsuite tracking."""
+    """Convert seed arrays into xpart.Particles.
+
+    ``species``, ``charge_filter``, and optional ``n_particles`` / ``p0c_eV``
+    are supplied by the experiment (via the pipeline). This function performs
+    conversion only — it does not choose an experiment.
+    """
     if seeds.positions.size == 0:
         raise ValueError("Cannot build Xsuite particles from an empty seed selection")
 
@@ -170,11 +176,11 @@ def run_transport(
     particles: xp.Particles,
     conversion_meta: ParticleConversionMeta,
     *,
+    num_turns: int,
     source_path: Optional[str] = None,
     beamline_hash: str = "",
-    num_turns: int = 1,
 ) -> TransportResult:
-    """Track particles through an Xsuite line."""
+    """Track particles through an Xsuite line. ``num_turns`` comes from the experiment."""
     if line.particle is None:
         line.particle = particles
     line.build_tracker()
@@ -192,7 +198,7 @@ def write_transport_output(
     result: TransportResult,
     output_dir: str,
     *,
-    experiment_name: str = "transport",
+    experiment_name: str,
     beamline_summary: Optional[list[dict]] = None,
 ) -> str:
     """Write transported particle state to an optimization-ready NPZ file."""

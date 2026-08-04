@@ -1,4 +1,8 @@
-"""Xsuite transport pipeline: load seeds → track → write NPZ."""
+"""Xsuite transport pipeline: receive experiment parameters → execute stages.
+
+This module owns orchestration only. It does not invent scientific parameters;
+every experiment-specific value must be supplied by the caller (the experiment).
+"""
 
 from __future__ import annotations
 
@@ -46,37 +50,27 @@ def _apply_momentum_slice(seeds: SeedArrays, momentum_slice) -> SeedArrays:
 def run(
     *,
     line: xt.Line,
-    particle: str = "antiproton",
-    count: Optional[int] = None,
-    momentum_slice=None,
-    name: str = "transport",
-    output_dir: str = "transport/outputs",
+    particle: str,
+    count: Optional[int],
+    momentum_slice,
+    num_turns: int,
+    output_name: str,
+    output_dir: str,
     seeds: Optional[SeedArrays] = None,
-    num_turns: int = 1,
     p0c_eV: Optional[float] = None,
     write_npz: bool = True,
     run_outputs_dir: Optional[str] = None,
 ):
     """Track particles through an Xsuite line and write transported NPZ output.
 
-    Parameters
-    ----------
-    line:
-        Caller-built ``xtrack.Line``.
-    particle:
-        Species name (also selects charge sign).
-    count:
-        Maximum number of particles to track (None = all selected seeds).
-    momentum_slice:
-        Optional ``(p_min, p_max)`` in GeV/c.
-    seeds:
-        Optional seed arrays. If omitted, loads the latest Geant4 run.
+    All scientific parameters are required from the experiment. This function
+    only loads (if needed), filters, converts, tracks, and writes.
     """
     if seeds is None:
         seeds = load_geant4_seeds()
     seeds = _apply_momentum_slice(seeds, momentum_slice)
 
-    # Species name implies charge filter (antiproton → -1, proton → +1).
+    # Charge selection follows the experiment's particle species.
     charge_filter = particle.lower() if particle.lower() in ("antiproton", "proton") else "any"
 
     xparticles, conversion_meta = seeds_to_xparticles(
@@ -106,7 +100,7 @@ def run(
         output_path = write_transport_output(
             result,
             run_outputs_dir,
-            experiment_name=name,
+            experiment_name=output_name,
         )
         print(f"[Transport] Wrote transported NPZ: {output_path}")
         from transport.analysis import analyze

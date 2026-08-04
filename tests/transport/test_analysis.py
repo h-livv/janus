@@ -31,7 +31,9 @@ def _seeds(n=20):
 
 def test_analyze_writes_all_diagnostics(tmp_path):
     seeds = _seeds()
-    particles, meta = seeds_to_xparticles(seeds, species="antiproton")
+    particles, meta = seeds_to_xparticles(
+        seeds, species="antiproton", charge_filter="antiproton"
+    )
     line = xt.Line(elements=[xt.Drift(length=2.0), xt.Quadrupole(length=1.0, k1=0.2)])
     line.particle = particles
     result = run_transport(line, particles, meta, num_turns=1)
@@ -63,8 +65,12 @@ def test_pipeline_auto_runs_analysis(tmp_path):
     result, out_dir = run(
         line=line,
         particle="antiproton",
+        count=None,
+        momentum_slice=None,
+        num_turns=1,
+        output_name="pipe_ana",
+        output_dir=str(tmp_path / "out"),
         seeds=seeds,
-        name="pipe_ana",
         run_outputs_dir=str(tmp_path / "out"),
     )
     out = Path(out_dir)

@@ -22,8 +22,8 @@ _PDG_PROTON     =  2212
 
 # Cache version tag — bump whenever the output schema changes to force
 # invalidation of stale on-disk caches automatically.
-# v5: explicit momenta_mevc array in NPZ cache
-_CACHE_VERSION = "v5"
+# v6: no momentum cut at ROOT extraction (experiment applies momentum_slice)
+_CACHE_VERSION = "v6"
 
 # Fixed cache filename — does not encode N so the cache survives new batches
 _CACHE_FILENAME = f"merged_seeds_cache_{_CACHE_VERSION}.npz"
@@ -211,9 +211,11 @@ def _parse_single_root(root_filepath: Path):
     """
     Parse one ROOT file. Returns (positions, velocities, gammas, charges, momenta_mevc)
     as float32/int8 arrays, or None if the file has no usable data.
+
+    Extracts proton and antiproton birth states only (PDG ±2212). Does not apply
+    momentum selection — that is an experiment parameter applied in the pipeline.
     """
     c_light = 299792458.0
-    p_min, p_max = 3480.0, 3680.0  # ±100 MeV/c around 3580 MeV/c nominal
 
     with uproot.open(root_filepath) as f:
         if 'Seeds' not in f:
@@ -240,16 +242,10 @@ def _parse_single_root(root_filepath: Path):
         py_mevc = group['start_py'].array(library="np")[charged_mask]
         pz_mevc = group['start_pz'].array(library="np")[charged_mask]
 
-    positions_raw = np.column_stack((x_m, y_m, z_m)).astype(np.float32)
-    P_mevc        = np.column_stack((px_mevc, py_mevc, pz_mevc))
-    p_squared     = np.sum(P_mevc**2, axis=1)
-    p_total       = np.sqrt(p_squared)
-
-    p_mask      = (p_total >= p_min) & (p_total <= p_max)
-    positions_f = positions_raw[p_mask]
-    P_mevc_f    = P_mevc[p_mask]
-    p_sq_f      = p_squared[p_mask]
-    pdg_f       = pdg_charged[p_mask]
+    positions_f = np.column_stack((x_m, y_m, z_m)).astype(np.float32)
+    P_mevc_f    = np.column_stack((px_mevc, py_mevc, pz_mevc)).astype(np.float32)
+    p_sq_f      = np.sum(P_mevc_f.astype(np.float64)**2, axis=1)
+    pdg_f       = pdg_charged
 
     E_total    = np.sqrt(p_sq_f + M_PBAR**2)
     gammas     = (E_total / M_PBAR).astype(np.float32)
@@ -259,10 +255,9 @@ def _parse_single_root(root_filepath: Path):
     n_pbar = int(np.sum(pdg_f == _PDG_ANTIPROTON))
     n_prot = int(np.sum(pdg_f == _PDG_PROTON))
     print(f"[DataIO]   {root_filepath.name}: "
-          f"{n_pbar} antiprotons + {n_prot} protons (after momentum cut)")
+          f"{n_pbar} antiprotons + {n_prot} protons")
 
-    momenta_mevc = P_mevc_f.astype(np.float32)
-    return positions_f, velocities, gammas, charges, momenta_mevc
+    return positions_f, velocities, gammas, charges, P_mevc_f
 
 
 # ---------------------------------------------------------------------------
@@ -501,7 +496,10 @@ _C_LIGHT = 299792458.0
 
 
 def load_geant4_seeds() -> SeedArrays:
-    """Load filtered proton/antiproton seeds from the latest Geant4 ROOT run."""
+    """Load proton/antiproton birth-state seeds from the latest Geant4 ROOT run.
+
+    Does not select species or momentum window — the experiment does that.
+    """
     root_file = get_latest_run_file()
     positions, velocities, gammas, charges, momenta_mevc = extract_cern_ad_seeds([root_file])
     return SeedArrays(

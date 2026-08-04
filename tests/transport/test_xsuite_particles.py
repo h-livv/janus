@@ -24,7 +24,9 @@ def _antiproton_seeds(n=1, px_mevc=0.0, py_mevc=0.0, pz_mevc=3580.0):
 
 def test_seeds_to_xparticles_coordinates():
     seeds = _antiproton_seeds(px_mevc=35.8, py_mevc=17.9)
-    particles, meta = seeds_to_xparticles(seeds, species="antiproton", charge_filter="any")
+    particles, meta = seeds_to_xparticles(
+        seeds, species="antiproton", charge_filter="any"
+    )
 
     p0_mevc = meta.p0c_eV / 1e6
     assert np.isclose(particles.x[0], 0.001)
@@ -46,4 +48,4 @@ def test_seeds_to_xparticles_rejects_mixed_charge():
         start_z=np.zeros(2, dtype=np.float32),
     )
     with pytest.raises(ValueError, match="Mixed charge"):
-        seeds_to_xparticles(seeds, species="antiproton")
+        seeds_to_xparticles(seeds, species="antiproton", charge_filter="any")

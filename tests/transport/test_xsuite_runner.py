@@ -26,7 +26,9 @@ def _drift_seeds(px_mevc=35.8):
 
 def test_drift_preserves_px_and_offsets_x():
     seeds = _drift_seeds(px_mevc=35.8)
-    particles, meta = seeds_to_xparticles(seeds, species="antiproton")
+    particles, meta = seeds_to_xparticles(
+        seeds, species="antiproton", charge_filter="antiproton"
+    )
     line = xt.Line(elements=[xt.Drift(length=10.0)])
     line.particle = particles
     result = run_transport(
@@ -44,7 +46,9 @@ def test_drift_preserves_px_and_offsets_x():
 
 def test_write_transport_output_shape(tmp_path):
     seeds = _drift_seeds()
-    particles, meta = seeds_to_xparticles(seeds, species="antiproton")
+    particles, meta = seeds_to_xparticles(
+        seeds, species="antiproton", charge_filter="antiproton"
+    )
     line = xt.Line(elements=[xt.Drift(length=1.0)])
     line.particle = particles
     result = run_transport(line, particles, meta, num_turns=1)
@@ -77,9 +81,12 @@ def test_pipeline_file_seeds_integration(tmp_path):
     result, out_dir = run(
         line=line,
         particle="antiproton",
-        seeds=seeds,
-        name="integration",
+        count=None,
+        momentum_slice=None,
+        num_turns=1,
+        output_name="integration",
         output_dir=str(tmp_path / "out"),
+        seeds=seeds,
         run_outputs_dir=str(tmp_path / "out"),
     )
     assert result.output_path is not None

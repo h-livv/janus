@@ -68,7 +68,6 @@ Replace `<version>` below with the desired Geant4 release.
 wget https://cern.ch/geant4-data/releases/geant4-<version>.tar.gz
 ```
 
-
 Example:
 
 ```bash
@@ -111,7 +110,7 @@ These options:
 - Install all required physics datasets
 - Enable the Qt GUI
 - Enable OpenGL visualization
-- Enable HDF5 support for data export
+- Enable ROOT support (Janus collision output uses ROOT)
 
 ---
 
@@ -173,7 +172,7 @@ Expected output:
 
 # Building This Project
 
-From janus/engine:
+From `janus/engine`:
 
 ```bash
 mkdir -p build
@@ -182,6 +181,8 @@ cd build
 cmake ..
 cmake --build . -j$(nproc)
 ```
+
+---
 
 # Running the simulation
 
@@ -194,10 +195,31 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Run the python interface:
+Collision configuration lives in `interactions/config.json`. Important defaults:
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `run_settings.interactive` | `true` | Set to `false` for headless / batch runs |
+| `output.record_mode` | `"Hit"` | `"Hit"` = Target→Chamber boundary; `"Birth"` = \(t=0\) birth states |
+| `beam.count` / `beam.energy_mean` | study-specific | Collision scientific parameters |
+
+Run via the Python entry point (orchestration lives in `interactions/dependencies/interface.py`):
 
 ```bash
 python interactions/run.py
+```
+
+### Where output lands
+
+1. Geant4 writes intermediate ROOT files under project `temp/` (`temp/simulation`, `temp/validation`).
+2. The Python interface packages them into:
+
+```text
+interactions/runs/<run_name>/
+├── simulation.root          # Seeds tree → transport input
+├── validation.root          # Validation tree → collision checks
+├── <run_name>_config.json
+└── particle_summary.txt
 ```
 
 ---
@@ -221,19 +243,33 @@ root --version
 root-config --version
 ```
 
-For the Python data pipeline, install:
+For the Python data pipeline and collision validation:
 
 ```bash
-pip install uproot awkward
+pip install uproot awkward particle matplotlib
 ```
 
-To use the data pipeline, set `"interactive": false` in `interactions/config.json`.
+(`particle` is required by `interactions/validation/validate.py` and particle-summary generation.)
+
+---
+
+## Validate the collision run
+
+```bash
+# Phases 1–3 (validation.root)
+python interactions/validation/validate.py
+
+# Phase 4 plots (validation.root + simulation.root)
+python interactions/validation/physical_validation.py
+```
+
+See [collision_validation.md](collision_validation.md).
 
 ---
 
 ## Next: transport
 
-Once a run exists under `interactions/runs/*/simulation.root`, transport Geant4 seeds with Xsuite:
+Once a run exists under `interactions/runs/*/simulation.root`, transport Geant4 seeds with Xsuite. Scientific parameters (species, momentum window, count, …) live only in the experiment script:
 
 ```bash
 pip install -r requirements.txt
