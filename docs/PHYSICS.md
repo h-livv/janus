@@ -175,7 +175,7 @@ Beamline transport is delegated to **Xsuite**. Janus owns only:
 * Geant4 ROOT → NPZ seed extraction (`transport/io.py`) — load only; no experiment cuts
 * Conversion of seed arrays into `xpart.Particles` (`transport/xsuite.py`)
 * Packaging of transported NPZ output for optimization
-* Experiment scripts under `transport/experiments/` that define every scientific parameter
+* Experiment scripts under `experiments/transport/` that define every scientific parameter
 
 Beamlines are constructed in Python with native Xsuite elements (`xt.Drift`, `xt.Quadrupole`, `xt.Bend`, …). Particle coordinates use the Xsuite convention: transverse positions `x`, `y` [m]; normalized momenta `px`, `py`; longitudinal phase `zeta` (set to 0 at injection); momentum deviation `delta`. Reference mass uses `xt.PROTON_MASS_EV` for both proton and antiproton ensembles.
 
@@ -453,7 +453,7 @@ is the sextupole strength.
 
 **Implemented today**
 
-* Target production (Geant4: `engine/` + `interactions/`)
+* Target production (Geant4: `engines/geant4/` + `interactions/`)
 * Collision-stage validation (`interactions/validation/`)
 * NPZ seed extraction from Geant4 ROOT output (`transport/io.py`)
 * Xsuite-backed drift, quadrupole, and bend transport via Python experiment scripts
@@ -464,7 +464,7 @@ is the sextupole strength.
 * Magnetic horn as an Xsuite field-map element
 * Cooling, deceleration, trapping, and global optimization
 
-For how to define and run a transport study, see [transport_guide.md](transport_guide.md).
+For how to define and run a transport study, see [transport guide](guides/transport_guide.md).
 
 
 # Philosophy

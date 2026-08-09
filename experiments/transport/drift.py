@@ -14,7 +14,7 @@ def main():
     momentum_slice = None
     num_turns = 1
     output_name = "drift"
-    output_dir = "transport/outputs"
+    output_dir = "data/transport"
 
     # Initial conditions belong to the experiment.
     seeds = single_particle_seeds(

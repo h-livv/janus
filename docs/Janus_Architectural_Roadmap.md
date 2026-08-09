@@ -1,5 +1,7 @@
 # Janus Architectural Roadmap
 
+For the **current** pipeline and repository layout, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Objective
 
 Transition Janus from a transport simulation pipeline into a
@@ -12,14 +14,15 @@ reproducible computational research framework for studying the
 
 ## Completed
 
--   Geant4 production engine with validation.
+-   Geant4 production engine with collision validation (Phases 1–4).
 -   Geant4 → Janus → Xsuite transport pipeline.
--   Clean orchestration architecture with experiment-driven
-    configuration.
--   Basic transport diagnostics and plotting.
+-   Experiment-driven configuration (`experiments/transport/`).
+-   Transport diagnostics, structured metrics, provenance.
+-   Study / sweep framework (`transport/studies/`) with CSV export.
+-   Directory layout separating engines, capabilities, examples, and `data/`.
 
 The remaining work is **not additional simulation physics**, but
-**research infrastructure**.
+**research infrastructure** (optimization, exploration, and an independent lab that depends on Janus).
 
 ------------------------------------------------------------------------
 

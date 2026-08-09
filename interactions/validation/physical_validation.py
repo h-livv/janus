@@ -18,11 +18,11 @@ def main():
     sim_path = args.sim_root
 
     if not val_path or not sim_path:
-        runs = glob.glob("interactions/runs/run_*")
+        runs = glob.glob("data/interactions/run_*")
         if not runs:
             runs = glob.glob("outputs/run_*")
         if not runs:
-            print("Fatal Error: No output directories found in interactions/runs/ or outputs/ and no files provided.")
+            print("Fatal Error: No output directories found in data/interactions/ or outputs/ and no files provided.")
             sys.exit(1)
         latest_run = max(runs, key=os.path.getmtime)
         val_path = val_path or os.path.join(latest_run, "validation.root")

@@ -54,14 +54,14 @@ Janus **does** validate:
 # Synthetic single-particle drift (no Geant4 required)
 python -m transport.main --experiment drift
 
-# Geant4 seeds (requires interactions/runs/*/simulation.root)
+# Geant4 seeds (requires data/interactions/*/simulation.root)
 python -m transport.main --experiment geant4_antiproton
 
 # Parameter sweep example
-python -m transport.experiments.study_drift_length
+python -m experiments.transport.study_drift_length
 ```
 
-Expect under `transport/outputs/run_<timestamp>/`:
+Expect under `data/transport/run_<timestamp>/`:
 
 - `transported_particles.npz`
 - `metrics.json`
@@ -81,4 +81,4 @@ DATAIO_VERBOSE=1 python -m transport.main --experiment geant4_antiproton
 
 Transport configurations are Python experiment scripts, not YAML files.
 Computational studies use `transport/studies/` with a Parameter Generator and an Experiment Factory.
-See [transport_guide.md](transport_guide.md).
+See [transport guide](../guides/transport_guide.md).

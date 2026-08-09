@@ -1,6 +1,6 @@
 import time
 from pathlib import Path
-from dependencies.interface import Simulation
+from interface import Simulation
 
 def run_production_batches():
     # Define batches

@@ -8,7 +8,8 @@ from pathlib import Path
 
 
 def _list_experiments():
-    experiments_dir = Path(__file__).resolve().parent / "experiments"
+    project_root = Path(__file__).resolve().parent.parent
+    experiments_dir = project_root / "experiments" / "transport"
     return sorted(
         p.stem
         for p in experiments_dir.glob("*.py")
@@ -27,12 +28,12 @@ def main():
         "--experiment",
         default="drift",
         choices=names,
-        help="Experiment module under transport/experiments/ (default: drift)",
+        help="Experiment module under experiments/transport/ (default: drift)",
     )
     args = parser.parse_args()
 
     print(f"[Main] Running transport: {args.experiment}")
-    module = importlib.import_module(f"transport.experiments.{args.experiment}")
+    module = importlib.import_module(f"experiments.transport.{args.experiment}")
     module.main()
 
 

@@ -37,12 +37,12 @@ def main():
 
     root_path = args.root_file
     if not root_path:
-        runs = glob.glob("interactions/runs/run_*")
+        runs = glob.glob("data/interactions/run_*")
         if not runs:
-            # Fallback to outputs/ if interactions/runs/ doesn't exist
+            # Fallback to outputs/ if data/interactions/ doesn't exist
             runs = glob.glob("outputs/run_*")
         if not runs:
-            print("Fatal Error: No output directories found in interactions/runs/ or outputs/ and no file provided.")
+            print("Fatal Error: No output directories found in data/interactions/ or outputs/ and no file provided.")
             sys.exit(1)
         latest_run = max(runs, key=os.path.getmtime)
         root_path = os.path.join(latest_run, "validation.root")

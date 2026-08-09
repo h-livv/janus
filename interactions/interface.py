@@ -13,9 +13,9 @@ from matplotlib import interactive, lines
 # Paths
 # =========================================================
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-ENGINE_DIR = BASE_DIR.parent / "engine"
+BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
+ENGINE_DIR = PROJECT_ROOT / "engines" / "geant4"
 
 EXECUTABLE = ENGINE_DIR / "build" / "janus"
 MACRO_PATH = ENGINE_DIR / "macros" / "run.mac"
@@ -23,7 +23,7 @@ MACRO_PATH = ENGINE_DIR / "macros" / "run.mac"
 HARDCODED_H5_VAL = PROJECT_ROOT / "temp" / "validation.root"
 HARDCODED_H5_SIM = PROJECT_ROOT / "temp" / "simulation.root"
 
-OUTPUT_DIR = BASE_DIR / "runs"
+OUTPUT_DIR = PROJECT_ROOT / "data" / "interactions"
 
 
 # =========================================================
@@ -524,10 +524,10 @@ class Simulation:
             self.save_metadata(run_folder, run_name)
             
             # 5. Run analyze.py to generate summary
-            from . import analyze
+            import analyze
             analyze.generate_summary(new_val_path, run_folder)
             
-            print(f"[+] Run packaged successfully in: interactions/runs/{run_name}/\n")
+            print(f"[+] Run packaged successfully in: data/interactions/{run_name}/\n")
         else:
             print("[-] Warning: Expected output ROOT files not found. Data packaging skipped.\n")
 

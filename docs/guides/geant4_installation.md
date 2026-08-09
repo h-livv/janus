@@ -170,11 +170,12 @@ Expected output:
 
 ---
 
-# Building This Project
+# Building the Janus Geant4 engine
 
-From `janus/engine`:
+From the repository root, with the Geant4 environment loaded (`source …/geant4.sh`):
 
 ```bash
+cd engines/geant4
 mkdir -p build
 cd build
 
@@ -182,51 +183,23 @@ cmake ..
 cmake --build . -j$(nproc)
 ```
 
----
+The executable is `engines/geant4/build/janus`. Collision runs invoke it via `interactions/interface.py`.
 
-# Running the simulation
-
-Create a virtual environment and install the project requirements.
+If you move an existing Geant4 installation after it has been built, reconfigure and rebuild both Geant4 and this project. CMake embeds absolute paths during configuration:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -r requirements.txt
-```
-
-Collision configuration lives in `interactions/config.json`. Important defaults:
-
-| Key | Default | Notes |
-|-----|---------|-------|
-| `run_settings.interactive` | `true` | Set to `false` for headless / batch runs |
-| `output.record_mode` | `"Hit"` | `"Hit"` = Target→Chamber boundary; `"Birth"` = \(t=0\) birth states |
-| `beam.count` / `beam.energy_mean` | study-specific | Collision scientific parameters |
-
-Run via the Python entry point (orchestration lives in `interactions/dependencies/interface.py`):
-
-```bash
-python interactions/run.py
-```
-
-### Where output lands
-
-1. Geant4 writes intermediate ROOT files under project `temp/` (`temp/simulation`, `temp/validation`).
-2. The Python interface packages them into:
-
-```text
-interactions/runs/<run_name>/
-├── simulation.root          # Seeds tree → transport input
-├── validation.root          # Validation tree → collision checks
-├── <run_name>_config.json
-└── particle_summary.txt
+cd engines/geant4
+rm -rf build
+mkdir build && cd build
+cmake ..
+cmake --build . -j$(nproc)
 ```
 
 ---
 
-## Install ROOT
+## Install ROOT (output format)
 
-Janus uses CERN ROOT as the simulation output format.
+Janus uses CERN ROOT as the collision output format.
 
 On Fedora:
 
@@ -236,16 +209,17 @@ sudo dnf install \
     python3-root
 ```
 
-Verify the installation:
+Verify:
 
 ```bash
 root --version
 root-config --version
 ```
 
-For the Python data pipeline and collision validation:
+For the Python packaging / validation path:
 
 ```bash
+pip install -r requirements.txt
 pip install uproot awkward particle matplotlib
 ```
 
@@ -253,41 +227,9 @@ pip install uproot awkward particle matplotlib
 
 ---
 
-## Validate the collision run
+## Next steps
 
-```bash
-# Phases 1–3 (validation.root)
-python interactions/validation/validate.py
-
-# Phase 4 plots (validation.root + simulation.root)
-python interactions/validation/physical_validation.py
-```
-
-See [collision_validation.md](collision_validation.md).
-
----
-
-## Next: transport
-
-Once a run exists under `interactions/runs/*/simulation.root`, transport Geant4 seeds with Xsuite. Scientific parameters (species, momentum window, count, …) live only in the experiment script:
-
-```bash
-pip install -r requirements.txt
-python -m transport.main --experiment geant4_antiproton
-```
-
-See [transport_guide.md](transport_guide.md) for writing your own experiment script.
-
-If you move an existing Geant4 installation after it has been built,
-reconfigure and rebuild both Geant4 and this project. CMake embeds
-absolute paths to the installation during configuration.
-
-```bash
-rm -rf build
-
-mkdir build
-cd build
-
-cmake ..
-cmake --build . -j$(nproc)
-```
+1. **Run a collision study** — [collision guide](collision_guide.md)
+2. **Validate ROOT output** — [collision validation](../validation/collision_validation.md)
+3. **Transport seeds** — [transport guide](transport_guide.md)
+4. **Pipeline overview** — [architecture](../ARCHITECTURE.md)

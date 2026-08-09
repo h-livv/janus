@@ -117,7 +117,7 @@ def load_seed_npz(path: str | Path) -> SeedArrays:
     )
 
 
-def get_run_files(outputs_dir_name="interactions/runs", target_filename="simulation.root"):
+def get_run_files(outputs_dir_name="data/interactions", target_filename="simulation.root"):
     base_dir     = Path(__file__).resolve().parent.parent
     outputs_path = base_dir / outputs_dir_name
 
@@ -142,12 +142,14 @@ def get_run_files(outputs_dir_name="interactions/runs", target_filename="simulat
 # ---------------------------------------------------------------------------
 
 def _normalize_path(p) -> str:
-    """Convert a path to a relative POSIX-style path starting from 'interactions/runs/' to be OS-independent."""
+    """Convert a path to a relative POSIX-style path starting from 'data/interactions/' to be OS-independent."""
     p_str = str(p).replace("\\", "/")
+    if "data/interactions/" in p_str:
+        return "data/interactions/" + p_str.split("data/interactions/", 1)[1]
     if "interactions/runs/" in p_str:
-        return "interactions/runs/" + p_str.split("interactions/runs/", 1)[1]
+        return "data/interactions/" + p_str.split("interactions/runs/", 1)[1]
     if "runs/" in p_str:
-        return "interactions/runs/" + p_str.split("runs/", 1)[1]
+        return "data/interactions/" + p_str.split("runs/", 1)[1]
     return p_str
 
 
@@ -276,7 +278,7 @@ def extract_cern_ad_seeds(root_filepaths=None):
     Caching strategy
     ----------------
     A fixed-name .npz cache and a companion JSON manifest are stored in the
-    interactions/runs/ directory.  The manifest records {filepath: (size, mtime_ns)} for
+    data/interactions/ directory.  The manifest records {filepath: (size, mtime_ns)} for
     every ROOT file that contributed to the cache.
 
     On each call:
@@ -435,7 +437,7 @@ def _save_cache(cache_path, manifest_path, manifest,
           f"({n_total} particles: {n_pbar} pbar + {n_prot} p)")
 
 
-def get_latest_run_file(outputs_dir_name="interactions/runs", target_filename="simulation.root"):
+def get_latest_run_file(outputs_dir_name="data/interactions", target_filename="simulation.root"):
     target_files = get_run_files(outputs_dir_name, target_filename)
     if not target_files:
         raise FileNotFoundError(f"No {target_filename} found in {outputs_dir_name}")

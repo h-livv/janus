@@ -23,7 +23,7 @@ Which parameters most strongly influence antiproton production yield, and can se
 ## Computational Pipeline
 
 ```
-  Geant4 Engine (engine/)
+  Geant4 Engine (engines/geant4/)
        │
        ▼
   interactions/  →  simulation.root (Seeds) + validation.root
@@ -32,7 +32,7 @@ Which parameters most strongly influence antiproton production yield, and can se
   transport/io.py  →  NPZ seed cache (p/p̄; no momentum cut)
        │
        ▼
-  transport/experiments/*.py  →  scientific params + xt.Line + run(...)
+  experiments/transport/*.py  →  scientific params + xt.Line + run(...)
        │
        ▼
   Xsuite tracking → transported_particles.npz + metrics + provenance + diagnostics
@@ -45,19 +45,20 @@ Which parameters most strongly influence antiproton production yield, and can se
 
 ## Documentation
 
-- [Transport pipeline](docs/TRANSPORT_PIPELINE.md) — **authoritative end-to-end transport walkthrough**
-- [Transport guide](docs/transport_guide.md) — how to write and run a transport experiment
-- [Architecture](docs/ARCHITECTURE.md) — repository layout and data contracts
+- [Architecture](docs/ARCHITECTURE.md) — full pipeline, repository layout, data contracts
+- [Geant4 installation](docs/guides/geant4_installation.md) — install Geant4 and build the Janus engine
+- [Collision guide](docs/guides/collision_guide.md) — configure and run collision experiments
+- [Transport guide](docs/guides/transport_guide.md) — transport with mock seeds or Geant4 data
 - [Physics](docs/PHYSICS.md) — physical models
-- [Geant4 installation](docs/geant4_installation.md) — building the collision engine
-- [Collision validation](docs/collision_validation.md) — Geant4 validation (Phases 1–4)
-- [Transport validation](docs/transport_validation.md) — Xsuite boundary tests
+- [Collision validation](docs/validation/collision_validation.md) — Geant4 validation (Phases 1–4)
+- [Transport validation](docs/validation/transport_validation.md) — Xsuite boundary tests
+- [Architectural roadmap](docs/Janus_Architectural_Roadmap.md) — future research infrastructure
 
 ---
 
 ## How to run a transport configuration
 
-Transport “configs” are Python scripts in `transport/experiments/`.
+Transport “configs” are Python scripts in `experiments/transport/`.
 
 ```bash
 pip install -r requirements.txt
@@ -65,13 +66,13 @@ pip install -r requirements.txt
 # Built-in smoke test (no Geant4 run required)
 python -m transport.main --experiment drift
 
-# Geant4-seeded study (requires interactions/runs/*/simulation.root)
+# Geant4-seeded study (requires data/interactions/*/simulation.root)
 python -m transport.main --experiment geant4_antiproton
 ```
 
-To add your own study, create `transport/experiments/my_study.py` with a `main()` that builds an `xtrack.Line`, sets every scientific parameter as plain variables, and calls `run(...)`. Full instructions: [docs/transport_guide.md](docs/transport_guide.md).
+To add your own study, create `experiments/transport/my_study.py` with a `main()` that builds an `xtrack.Line`, sets every scientific parameter as plain variables, and calls `run(...)`. Full instructions: [docs/guides/transport_guide.md](docs/guides/transport_guide.md).
 
-Outputs land in `transport/outputs/run_<timestamp>/` (`transported_particles.npz`, `metrics.json`, `provenance.json`, plots, `summary.txt`).
+Outputs land in `data/transport/run_<timestamp>/` (`transported_particles.npz`, `metrics.json`, `provenance.json`, plots, `summary.txt`).
 
 ---
 
@@ -79,12 +80,12 @@ Outputs land in `transport/outputs/run_<timestamp>/` (`transported_particles.npz
 
 | Stage | Status |
 |-------|--------|
-| Geant4 target bombardment | Implemented (`engine/`, `interactions/`) |
+| Geant4 target bombardment | Implemented (`engines/geant4/`, `interactions/`) |
 | Collision validation (Phases 1–3) | Implemented (`interactions/validation/validate.py`) |
 | Collision phenomenology (Phase 4) | Implemented (`interactions/validation/physical_validation.py`) |
 | ROOT → NPZ seed extraction | Implemented (`transport/io.py`) |
 | Xsuite transport (drift, quadrupole, bend) | Implemented |
-| Python experiment scripts (single source of truth) | Implemented (`transport/experiments/`) |
+| Python experiment scripts (single source of truth) | Implemented (`experiments/transport/`) |
 | Automatic NPZ diagnostics | Implemented (`transport/analysis/`) |
 | Structured metrics API | Implemented (`transport/analysis/metrics.py`) |
 | Study framework (CSV) | Implemented (`transport/studies/`) |
@@ -96,7 +97,7 @@ Outputs land in `transport/outputs/run_<timestamp>/` (`transported_particles.npz
 
 ## Validation
 
-**Collision** — Phases 1–3 check conservation laws on `validation.root`; Phase 4 plots emergent distributions from both ROOT files. See [docs/collision_validation.md](docs/collision_validation.md).
+**Collision** — Phases 1–3 check conservation laws on `validation.root`; Phase 4 plots emergent distributions from both ROOT files. See [docs/validation/collision_validation.md](docs/validation/collision_validation.md).
 
 ```bash
 python interactions/validation/validate.py
@@ -109,7 +110,7 @@ python interactions/validation/physical_validation.py
 pytest tests/transport/
 ```
 
-See [docs/transport_validation.md](docs/transport_validation.md).
+See [docs/validation/transport_validation.md](docs/validation/transport_validation.md).
 
 ---
 
@@ -118,13 +119,20 @@ See [docs/transport_validation.md](docs/transport_validation.md).
 ```
 janus/
 ├── docs/
-├── engine/                     # C++ Geant4 collision engine
+│   ├── ARCHITECTURE.md
+│   ├── PHYSICS.md
+│   ├── Janus_Architectural_Roadmap.md
+│   ├── guides/                 # install, collision, transport how-tos
+│   ├── validation/             # collision + transport validation
+│   └── assets/
+├── engines/
+│   └── geant4/                 # C++ Geant4 collision engine
 ├── interactions/               # Run orchestration + collision validation
 │   ├── run.py                  # Entry: python interactions/run.py
 │   ├── run_batches.py          # Multi-batch runner
 │   ├── config.json             # Collision study parameters
-│   ├── dependencies/           # Simulation interface (moves temp/ → runs/)
-│   ├── runs/                   # Packaged ROOT outputs (gitignored)
+│   ├── interface.py            # Simulation interface (moves temp/ → data/)
+│   ├── analyze.py              # Particle summary after a run
 │   └── validation/
 │       ├── validate.py         # Phases 1–3 (validation.root)
 │       └── physical_validation.py  # Phase 4 plots
@@ -135,13 +143,17 @@ janus/
 │   ├── xsuite.py               # Particles conversion + tracking + NPZ write
 │   ├── analysis/               # Metrics + plots + summary
 │   ├── studies/                # Parameter sweeps + CSV export
-│   ├── provenance.py           # Per-run provenance.json
-│   └── experiments/            # One Python script per study (params live here)
+│   └── provenance.py           # Per-run provenance.json
+├── experiments/
+│   └── transport/              # Example transport scripts (params live here)
+├── data/                       # Generated artifacts (gitignored)
+│   ├── interactions/           # Packaged ROOT outputs
+│   └── transport/              # Transport run outputs
 ├── tests/transport/
 └── requirements.txt
 ```
 
-Default `interactions/config.json` uses `"record_mode": "Hit"`: the `Seeds` tree records Target→Chamber boundary kinematics (not necessarily \(t=0\) birth). Set `"record_mode": "Birth"` for true birth-state recording. See [collision_validation.md](docs/collision_validation.md).
+Default `interactions/config.json` uses `"record_mode": "Hit"`: the `Seeds` tree records Target→Chamber boundary kinematics (not necessarily \(t=0\) birth). Set `"record_mode": "Birth"` for true birth-state recording. See [docs/validation/collision_validation.md](docs/validation/collision_validation.md).
 
 ---
 
@@ -151,6 +163,8 @@ Default `interactions/config.json` uses `"record_mode": "Hit"`: the `Seeds` tree
 - Cooling and deceleration stages
 - Trap injection
 - End-to-end pipeline optimization
+
+Longer-term research-infrastructure plans: [docs/Janus_Architectural_Roadmap.md](docs/Janus_Architectural_Roadmap.md).
 
 ---
 

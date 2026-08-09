@@ -8,7 +8,7 @@ This document describes the **implemented** Janus collision validation: what eac
 
 ## Two data streams
 
-Geant4 writes two ROOT files per run (staged under `temp/`, then packaged into `interactions/runs/<run_name>/`):
+Geant4 writes two ROOT files per run (staged under `temp/`, then packaged into `data/interactions/<run_name>/`):
 
 | File | Tree | Role |
 |------|------|------|
@@ -42,7 +42,7 @@ python interactions/validation/physical_validation.py
 # or: python interactions/validation/physical_validation.py path/to/validation.root path/to/simulation.root
 ```
 
-If paths are omitted, both scripts pick the newest directory under `interactions/runs/run_*`.
+If paths are omitted, both scripts pick the newest directory under `data/interactions/run_*`.
 
 **Extra Python deps** (not all are in `requirements.txt`):
 
@@ -128,4 +128,4 @@ After Phases 1–3 pass (and Phase 4 looks sensible), define and run a transport
 python -m transport.main --experiment geant4_antiproton
 ```
 
-Transport reads **`simulation.root` / `Seeds`** only (via `transport/io.py`). Momentum and species selection are experiment parameters — see [transport_guide.md](transport_guide.md).
+Transport reads **`simulation.root` / `Seeds`** only (via `transport/io.py`). Momentum and species selection are experiment parameters — see [transport guide](../guides/transport_guide.md).

@@ -28,7 +28,7 @@ def _experiment_factory(params: dict, run_outputs_dir: str):
         momentum_slice=None,
         num_turns=1,
         output_name="drift_length_study",
-        output_dir="transport/outputs",
+        output_dir="data/transport",
         seeds=seeds,
         run_outputs_dir=run_outputs_dir,
     )
@@ -43,7 +43,7 @@ def main():
     csv_path = run_study(
         parameter_generator=parameter_generator,
         experiment_factory=_experiment_factory,
-        study_output_dir="transport/outputs/study_drift_length",
+        study_output_dir="data/transport/study_drift_length",
         study_name="drift_length",
     )
     print(f"[Study] Wrote {csv_path}")

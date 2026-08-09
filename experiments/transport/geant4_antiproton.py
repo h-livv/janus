@@ -1,6 +1,6 @@
 """Transport Geant4 antiproton seeds through a minimal collector-style line.
 
-Requires a Geant4 run under interactions/runs/ with simulation.root.
+Requires a Geant4 run under data/interactions/ with simulation.root.
 
 All scientific parameters for this experiment are defined below.
 """
@@ -25,7 +25,7 @@ def main():
     momentum_slice = (3.48, 3.68)  # GeV/c
     num_turns = 1
     output_name = "geant4_antiproton"
-    output_dir = "transport/outputs"
+    output_dir = "data/transport"
 
     run(
         line=line,

@@ -1,4 +1,4 @@
-"""Smoke test: single antiproton through a bend."""
+"""Smoke test: single antiproton through a quadrupole."""
 
 import xtrack as xt
 
@@ -7,18 +7,18 @@ from transport.pipeline import run
 
 
 def main():
-    line = xt.Line(elements=[xt.Bend(length=10.0, angle=0.01)])
+    line = xt.Line(elements=[xt.Quadrupole(length=1.0, k1=0.5)])
 
     particle = "antiproton"
     count = 1
     momentum_slice = None
     num_turns = 1
-    output_name = "dipole"
-    output_dir = "transport/outputs"
+    output_name = "quadrupole"
+    output_dir = "data/transport"
 
     seeds = single_particle_seeds(
         particle=particle,
-        position=[0.0, 0.0, 0.0],
+        position=[0.001, 0.0, 0.0],
         velocity=[0.0, 0.0, 299492818.0],
         gamma=3.82,
     )

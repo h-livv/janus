@@ -2,6 +2,7 @@
 .vscode/
 .cursor/
 .pytest_cache/
+graphify-out/
 
 # Build / Geant4
 build/
@@ -11,15 +12,20 @@ Makefile
 cmake_install.cmake
 compile_commands.json
 
-# Runtime outputs
+# Runtime / generated outputs
 temp/
+data/
 outputs/
-interactions/runs/
-transport/outputs/
 validation_outputs/
 __pycache__/
+*.pyc
 
-# Data artifacts
+# OS / editor junk
+.DS_Store
+*~
+*.swp
+
+# Data artifacts (should live under data/, never in source)
 *.hdf5
 *.csv
 *.root
