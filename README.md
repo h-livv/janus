@@ -6,9 +6,11 @@ Janus models the antimatter pipeline as:
 
 **Geant4 particle production → NPZ seeds → Xsuite beam transport → analysis / optimization**
 
-Collision physics is handled by Geant4. Beamline tracking is handled by Xsuite. Janus owns seed I/O, experiment scripts, and lightweight post-transport diagnostics.
+---
 
-Every transport study is a plain Python script under `transport/experiments/`. That script is the single source of truth for scientific parameters (species, momentum window, count, turns, beamline, outputs). The rest of the transport package is an execution engine.
+## The Problem Statement
+
+Which parameters most strongly influence antiproton production yield, and can sensitivity analysis and optimization reveal non-obvious relationships between them?
 
 ---
 
