@@ -8,15 +8,17 @@ Janus models the antimatter pipeline as:
 
 ---
 
-## The Problem Statement
+## Research Question
 
 Which parameters most strongly influence antiproton production yield, and can sensitivity analysis and optimization reveal non-obvious relationships between them?
 
 ---
 
-## Bombardment of a Tungsten cylinder with protons accelerated to 26 GeV
+## Current System
 
 <img width="800" height="400" alt="janus_cropped" src="https://github.com/user-attachments/assets/36a93bff-578b-4129-a98c-88e6da6515d0" />
+
+26 GeV proton bombardment of a tungsten target
 
 ---
 
@@ -38,42 +40,11 @@ Which parameters most strongly influence antiproton production yield, and can se
   Xsuite tracking → transported_particles.npz + metrics + provenance + diagnostics
        │
        ▼
-  Studies / optimization (study CSV + metrics)
+  Studies / sensitivity analysis
+       │
+       ▼
+  Optimization
 ```
-
----
-
-## Documentation
-
-- [Architecture](docs/ARCHITECTURE.md) — full pipeline, repository layout, data contracts
-- [Geant4 installation](docs/guides/geant4_installation.md) — install Geant4 and build the Janus engine
-- [Collision guide](docs/guides/collision_guide.md) — configure and run collision experiments
-- [Transport guide](docs/guides/transport_guide.md) — transport with mock seeds or Geant4 data
-- [Physics](docs/PHYSICS.md) — physical models
-- [Collision validation](docs/validation/collision_validation.md) — Geant4 validation (Phases 1–4)
-- [Transport validation](docs/validation/transport_validation.md) — Xsuite boundary tests
-- [Architectural roadmap](docs/Janus_Architectural_Roadmap.md) — future research infrastructure
-
----
-
-## How to run a transport configuration
-
-Transport “configs” are Python scripts in `experiments/transport/`.
-
-```bash
-pip install -r requirements.txt
-
-# Built-in smoke test (no Geant4 run required)
-python -m transport.main --experiment drift
-
-# Geant4-seeded study (requires data/interactions/*/simulation.root)
-python -m transport.main --experiment geant4_antiproton
-```
-
-To add your own study, create `experiments/transport/my_study.py` with a `main()` that builds an `xtrack.Line`, sets every scientific parameter as plain variables, and calls `run(...)`. Full instructions: [docs/guides/transport_guide.md](docs/guides/transport_guide.md).
-
-Outputs land in `data/transport/run_<timestamp>/` (`transported_particles.npz`, `metrics.json`, `provenance.json`, plots, `summary.txt`).
-
 ---
 
 ## Current status
@@ -94,6 +65,29 @@ Outputs land in `data/transport/run_<timestamp>/` (`transported_particles.npz`, 
 | Cooling / trapping / optimization | Planned |
 
 ---
+
+
+## How to run a transport configuration
+
+Transport “configs” are Python scripts in `experiments/transport/`.
+
+```bash
+pip install -r requirements.txt
+
+# Built-in smoke test (no Geant4 run required)
+python -m transport.main --experiment drift
+
+# Geant4-seeded study (requires data/interactions/*/simulation.root)
+python -m transport.main --experiment geant4_antiproton
+```
+
+To add your own study, create `experiments/transport/my_study.py` with a `main()` that builds an `xtrack.Line`, sets every scientific parameter as plain variables, and calls `run(...)`. Full instructions: [docs/guides/transport_guide.md](docs/guides/transport_guide.md).
+
+Outputs land in `data/transport/run_<timestamp>/` (`transported_particles.npz`, `metrics.json`, `provenance.json`, plots, `summary.txt`).
+
+
+---
+
 
 ## Validation
 
@@ -153,7 +147,18 @@ janus/
 └── requirements.txt
 ```
 
-Default `interactions/config.json` uses `"record_mode": "Hit"`: the `Seeds` tree records Target→Chamber boundary kinematics (not necessarily \(t=0\) birth). Set `"record_mode": "Birth"` for true birth-state recording. See [docs/validation/collision_validation.md](docs/validation/collision_validation.md).
+---
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) — full pipeline, repository layout, data contracts
+- [Geant4 installation](docs/guides/geant4_installation.md) — install Geant4 and build the Janus engine
+- [Collision guide](docs/guides/collision_guide.md) — configure and run collision experiments
+- [Transport guide](docs/guides/transport_guide.md) — transport with mock seeds or Geant4 data
+- [Physics](docs/PHYSICS.md) — physical models
+- [Collision validation](docs/validation/collision_validation.md) — Geant4 validation (Phases 1–4)
+- [Transport validation](docs/validation/transport_validation.md) — Xsuite boundary tests
+- [Architectural roadmap](docs/Janus_Architectural_Roadmap.md) — future research infrastructure
 
 ---
 
