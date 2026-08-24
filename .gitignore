@@ -3,6 +3,7 @@
 .cursor/
 .pytest_cache/
 graphify-out/
+docs/agent/
 
 # Build / Geant4
 build/
