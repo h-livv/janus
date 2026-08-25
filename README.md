@@ -88,7 +88,7 @@ Transport writes `data/transport/run_<timestamp>/` (`transported_particles.npz`,
 
 ## Next
 
-The next computational pieces are a magnetic horn, more realistic beamlines, more observables, and a tighter Geant4–Xsuite coupling. Those exist so the question above can be asked on a more faithful system: sensitivity, parameter-space structure, and simulation-based optimization.
+The next computational pieces are more realistic beamlines, more observables, and a tighter Geant4–Xsuite coupling. Those exist so the question above can be asked on a more faithful system: sensitivity, parameter-space structure, and simulation-based optimization.
 
 [Roadmap](docs/Janus_Architectural_Roadmap.md).
 
