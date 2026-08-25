@@ -108,7 +108,7 @@ The collision produces secondary particles through hadronic interactions:
 * hyperons
 * other secondaries
 
-The target stage provides the initial phase-space distribution consumed by transport experiments (`xtrack.Line`). With the default collision `record_mode` of `"Hit"`, transport seeds are Target→Chamber boundary states; `"Birth"` records \(t=0\) production kinematics instead.
+The target stage provides the initial phase-space distribution consumed by transport (`Transport.inherit_particles()`). With the default collision `record_mode` of `"Hit"`, transport seeds are Target→Chamber boundary states; `"Birth"` records \(t=0\) production kinematics instead.
 
 ## Governing Equations
 
@@ -172,12 +172,12 @@ $$
 
 Beamline transport is delegated to **Xsuite**. Janus owns only:
 
-* Geant4 ROOT → NPZ seed extraction (`transport/io.py`) — load only; no experiment cuts
-* Conversion of seed arrays into `xpart.Particles` (`transport/xsuite.py`)
-* Packaging of transported NPZ output for optimization
-* Experiment scripts under `experiments/transport/` that define every scientific parameter
+* Topology instructions (`transport/config.json` / `Transport.beamline`)
+* Construction of `xt.Line` from that list (`construct_beamline()`)
+* Geant4 ROOT inherit (`transport/io.py`) — one `Seeds` tree; no momentum cut
+* Conversion of arrays into `xpart.Particles` and packaging of transported NPZ
 
-Beamlines are constructed in Python with native Xsuite elements (`xt.Drift`, `xt.Quadrupole`, `xt.Bend`, …). Particle coordinates use the Xsuite convention: transverse positions `x`, `y` [m]; normalized momenta `px`, `py`; longitudinal phase `zeta` (set to 0 at injection); momentum deviation `delta`. Reference mass uses `xt.PROTON_MASS_EV` for both proton and antiproton ensembles.
+Particle coordinates use the Xsuite convention: transverse positions `x`, `y` [m]; normalized momenta `px`, `py`; longitudinal phase `zeta` (set to 0 at injection); momentum deviation `delta`. Reference mass uses `xt.PROTON_MASS_EV` for both proton and antiproton ensembles.
 
 The physical models below describe the accelerator elements relevant to antimatter collection. Their tracking maps are provided by Xsuite, not by Janus. Horn and higher-order correctors remain conceptual until wired through Xsuite field-map elements.
 
@@ -455,9 +455,8 @@ is the sextupole strength.
 
 * Target production (Geant4: `engines/geant4/` + `interactions/`)
 * Collision-stage validation (`interactions/validation/`)
-* NPZ seed extraction from Geant4 ROOT output (`transport/io.py`)
-* Xsuite-backed drift, quadrupole, and bend transport via Python experiment scripts
-* Automatic post-transport diagnostics (`transport/analysis/`)
+* Inherit of Geant4 ROOT `Seeds` (`transport/io.py`)
+* Xsuite-backed drift, quadrupole, and bend transport via `Transport` + `config.json`
 
 **Not yet implemented**
 

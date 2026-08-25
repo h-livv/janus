@@ -122,10 +122,10 @@ Illustrative snapshots (from an earlier 100k-event study) are also kept under `d
 
 ## Relation to transport
 
-After Phases 1–3 pass (and Phase 4 looks sensible), define and run a transport experiment:
+After Phases 1–3 pass (and Phase 4 looks sensible), run transport:
 
 ```bash
-python -m transport.main --experiment geant4_antiproton
+python transport/run.py
 ```
 
-Transport reads **`simulation.root` / `Seeds`** only (via `transport/io.py`). Momentum and species selection are experiment parameters — see [transport guide](../guides/transport_guide.md).
+Transport reads **`simulation.root` / `Seeds`** only (via `transport/io.py`). Momentum and species selection are `Transport` / `config.json` fields — see [transport guide](../guides/transport_guide.md).

@@ -15,11 +15,11 @@ reproducible computational research framework for studying the
 ## Completed
 
 -   Geant4 production engine with collision validation (Phases 1–4).
--   Geant4 → Janus → Xsuite transport pipeline.
--   Experiment-driven configuration (`experiments/transport/`).
--   Transport diagnostics, structured metrics, provenance.
--   Study / sweep framework (`transport/studies/`) with CSV export.
--   Directory layout separating engines, capabilities, examples, and `data/`.
+-   Five-stage Geant4 → Janus → Xsuite transport (`Transport`: topology, construct, inherit, track, write).
+-   Topology as JSON + Python overrides (`transport/config.json`).
+-   Directory layout separating engines, capabilities, and `data/`.
+
+Studies, metrics APIs, and provenance are **not** part of the transport core. A future campaign is a script that loops `Transport` (see [ARCHITECTURE.md](ARCHITECTURE.md)).
 
 The remaining work is **not additional simulation physics**, but
 **research infrastructure** (optimization, exploration, and an independent lab that depends on Janus).
@@ -56,8 +56,8 @@ Stabilize interfaces and stop restructuring.
 
 -   Finalize the module hierarchy.
 -   Freeze data contracts.
--   Keep experiment scripts as the single source of scientific
-    parameters.
+-   Keep topology instructions (`config.json` / `Transport` attributes)
+    as the source of scientific parameters.
 -   Only modify architecture when required by new research.
 
 **Deliverable:** A stable framework suitable for long-term development.
@@ -65,6 +65,8 @@ Stabilize interfaces and stop restructuring.
 ------------------------------------------------------------------------
 
 # Phase 2 --- Metrics API
+
+Metrics are **not** produced by `Transport.run()`. When a study needs observables, compute them from `t.particles` or the NPZ in the calling script.
 
 ## Goal
 
@@ -92,6 +94,8 @@ Plots become a presentation layer built on top of these metrics.
 ------------------------------------------------------------------------
 
 # Phase 3 --- Study Framework
+
+Do **not** add `transport/studies/` until a real campaign needs it. The foundation is already a loop over `Transport` (inherit once, mutate topology, `run()`).
 
 ## Goal
 
@@ -122,6 +126,8 @@ type.
 ------------------------------------------------------------------------
 
 # Phase 4 --- Provenance & Reproducibility
+
+Each run already writes `topology.json` beside the NPZ (the instructions actually used). A heavier fingerprint log is optional and does not belong in the transport core.
 
 Automatically fingerprint every run.
 

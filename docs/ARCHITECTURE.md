@@ -1,6 +1,6 @@
 # Janus Architecture
 
-Janus is an orchestration layer for antimatter production and beam transport. It does not reimplement hadronic physics or magnetic tracking: **Geant4** owns particle production, **Xsuite** owns beam transport, and Janus owns configuration, seed extraction, experiment scripts, analysis, studies, and validation.
+Janus is an orchestration layer for antimatter production and beam transport. It does not reimplement hadronic physics or magnetic tracking: **Geant4** owns particle production, **Xsuite** owns beam transport, and Janus owns configuration, seed inherit, and the five-stage transport object.
 
 **Related:** [collision guide](guides/collision_guide.md) · [transport guide](guides/transport_guide.md) · [PHYSICS.md](PHYSICS.md) · [roadmap](Janus_Architectural_Roadmap.md)
 
@@ -17,34 +17,31 @@ temp/ → data/interactions/<run>/
         ├── <run>_config.json
         └── particle_summary.txt
 ↓
-transport/io.py  →  merged_seeds_cache_v6.npz (beside ROOT)
+transport/config.json            (topology instructions)
 ↓
-experiments/transport/<name>.py  (scientific params + xt.Line)
-↓
-transport/pipeline.run(...)      (filter → convert → track → write)
-↓
-Xsuite tracking
+Transport
+    load_topology()
+    construct_beamline()         → xt.Line
+    inherit_particles()          → positions, momenta, charges
+    run()                        → track + write
 ↓
 data/transport/run_<timestamp>/
         ├── transported_particles.npz
-        ├── metrics.json + provenance.json
-        └── plots + summary.txt
+        └── topology.json
 ```
 
 | Stage | Owner | Janus role |
 |-------|-------|------------|
 | Particle production | Geant4 (`engines/geant4/`, `interactions/`) | Configure, run, validate, package ROOT |
-| Seed boundary | Janus (`transport/io.py`) | ROOT → `SeedArrays` / NPZ cache (p/p̄ only; no momentum cut) |
-| Beam transport | Xsuite (`xpart` / `xtrack`) | Convert seeds, track caller-built `xt.Line`, write NPZ |
-| Diagnostics | Janus (`transport/analysis/`) | Metrics, plots, summary from transport outputs |
-| Studies | Janus (`transport/studies/`) | Parameter sweeps → CSV datasets |
-| Optimization | Planned (future lab) | Consume study CSV + metrics |
+| Topology | `transport/config.json` + `Transport.beamline` | Element list and run cuts |
+| Construct | `Transport.construct_beamline()` | Map topology → `xt.Line` |
+| Inherit | `transport/io.py` | One `Seeds` tree → arrays (p/p̄ only; no momentum cut) |
+| Track | Xsuite | `line.track(...)` |
+| Output | `Transport.run()` | NPZ + `topology.json` |
 
-Smoke experiments (`drift`, `quadrupole`, `dipole`) skip Geant4: they pass synthetic `SeedArrays` via `seeds=...`.
+Studies, metrics, and plots are **callers** of `Transport`, not modules inside it. A future sweep is a Python loop that mutates topology and calls `run()` again.
 
-There is no custom Boris integrator, no YAML transport config, and no interactive visualization in the transport path.
-
-**Single source of truth for transport:** every scientific parameter (species, momentum window, count, turns, output name/dir, beamline, initial conditions) lives in the experiment script under `experiments/transport/`. `pipeline.py`, `io.py`, and `xsuite.py` only execute what they are given.
+There is no custom Boris integrator, no YAML, and no automatic diagnostics in the transport path.
 
 ---
 
@@ -52,14 +49,10 @@ There is no custom Boris integrator, no YAML transport config, and no interactiv
 
 | Concern | Location |
 |---------|----------|
-| Computational engines | `engines/geant4/` (in-repo Geant4 app); Xsuite as external library via `transport/xsuite.py` |
+| Computational engines | `engines/geant4/` (in-repo Geant4 app); Xsuite as external library |
 | Scientific capabilities | `interactions/` (collisions), `transport/` (beam transport) |
-| Study / sweep tooling | `transport/studies/` (framework infrastructure, not lab research) |
-| Framework examples | `experiments/transport/` |
 | Generated artifacts | `data/interactions/`, `data/transport/` |
 | Validation | `interactions/validation/`, `tests/transport/` |
-
-A future independent research lab may depend on Janus for engines, capabilities, studies tooling, and validation — without Janus absorbing optimization campaigns or research datasets.
 
 ---
 
@@ -77,15 +70,10 @@ janus/
 │   ├── analyze.py
 │   └── validation/             # Collision Phases 1–4
 ├── transport/
-│   ├── main.py                 # CLI: --experiment <name>
-│   ├── pipeline.py             # Orchestration only
-│   ├── io.py                   # ROOT → NPZ seeds
-│   ├── xsuite.py               # Particles conversion + tracking + NPZ write
-│   ├── analysis/               # Metrics + plots + summary
-│   ├── studies/                # Parameter sweeps + CSV export
-│   └── provenance.py
-├── experiments/
-│   └── transport/              # Example scripts (params live here)
+│   ├── interface.py            # Beamline + Transport (five stages)
+│   ├── io.py                   # One ROOT Seeds parse
+│   ├── run.py                  # load_topology(); run()
+│   └── config.json             # Default topology + cuts
 ├── data/                       # Generated artifacts (gitignored)
 │   ├── interactions/
 │   └── transport/
@@ -111,9 +99,19 @@ janus/
 - Geant4 writes under `temp/`; `interactions/interface.py` packages into `data/interactions/<run_name>/`.
 - Validate before transport: see [collision validation](validation/collision_validation.md).
 
-### 1. Seed extraction
+### 1. Topology instructions
 
-Transport reads `data/interactions/*/simulation.root` → tree **`Seeds`**.
+`transport/config.json` (or Python overrides on `Transport`) holds an ordered element list plus run cuts: `particle`, `count`, `momentum_slice` (GeV/c), `num_turns`, `source`, `output_dir`.
+
+This is data, not an `xt.Line`. A study later changes a field (for example `k1`) and reconstructs.
+
+### 2. Construct beamline
+
+`construct_beamline()` maps each element dict through a small type map (`Drift`, `Quadrupole`, `Bend` / `SBend`) to Xsuite objects. Unknown types fail loudly. Adding a magnet type is a local registry change.
+
+### 3. Inherit particle data
+
+Transport reads **one** `data/interactions/*/simulation.root` → tree **`Seeds`** (explicit `source` or the newest file).
 
 | ROOT branch | Meaning | Units in ROOT |
 |-------------|---------|---------------|
@@ -121,45 +119,37 @@ Transport reads `data/interactions/*/simulation.root` → tree **`Seeds`**.
 | `start_x`, `start_y`, `start_z` | Position | mm |
 | `start_px`, `start_py`, `start_pz` | Momentum | MeV/c |
 
-IO keeps only proton / antiproton (PDG ±2212), converts to SI / MeV/c arrays, and caches `merged_seeds_cache_v6.npz`. Momentum windows are **not** applied here — that is the experiment’s `momentum_slice`.
+IO keeps proton / antiproton (PDG ±2212) and converts mm→m. Momentum windows and species selection happen at `run()`, so inherit can run once and be reused across topologies.
 
-### 2. Experiment + orchestration
+Synthetic tests set `positions`, `momenta_mevc`, and `charges` on `Transport` and skip ROOT.
 
-```bash
-python -m transport.main --experiment <name>
-```
+### 4. Forward simulation
 
-`main.py` imports `experiments.transport.<name>` and calls `main()`. The experiment builds `xt.Line`, sets all scientific parameters, and calls `pipeline.run(...)`.
-
-### 3. Conversion and tracking
-
-`transport/xsuite.py` maps `SeedArrays` → `xpart.Particles`:
+`run()` converts selected arrays to `xpart.Particles`:
 
 - `x`, `y` — transverse position [m]
 - `px`, `py` — \(p_{x,y}/p_0\)
 - `zeta` — 0 at injection
 - `delta` — \(|p|/p_0 - 1\)
-- `p0c` — median \(|p|c\) unless overridden
-- `mass0` — proton / antiproton mass
+- `p0c` — median \(|p|c\) of the selected ensemble
+- `mass0` — `xt.PROTON_MASS_EV`
 
-Tracking uses `line.build_tracker()` and `line.track(...)`.
+Then `line.build_tracker()` and `line.track(...)`. Each `run()` builds a fresh line and a fresh particle ensemble from the inherited arrays.
 
-### 4. Outputs and analysis
+### 5. Output data
 
-Each run writes under `data/transport/run_<timestamp>/` (see Data contracts). `transport/analysis` produces metrics and plots automatically after tracking.
+Each run writes under `data/transport/run_<timestamp>/`.
 
-### Call graph (Geant4-seeded)
+### Call graph
 
 ```text
-python -m transport.main --experiment geant4_antiproton
-→ experiments.transport.geant4_antiproton.main()
-→ pipeline.run(...)
-    ├─ load_geant4_seeds()          # or use seeds=... for mock data
-    ├─ _apply_momentum_slice(...)
-    ├─ seeds_to_xparticles(...)
-    ├─ run_transport(...)           # Xsuite track
-    ├─ write_transport_output(...)
-    └─ analyze(...)
+python transport/run.py
+→ Transport.load_topology()
+→ Transport.run()
+    ├─ construct_beamline()
+    ├─ inherit_particles()      # skipped if arrays already set
+    ├─ convert + line.track
+    └─ write NPZ + topology.json
 ```
 
 ---
@@ -175,57 +165,39 @@ python -m transport.main --experiment geant4_antiproton
 | `"Hit"` (default) | Kinematics at Target→Chamber boundary crossing |
 | `"Birth"` | \(t=0\) birth kinematics of secondaries |
 
-Transport injects particles at the line entrance regardless; absolute `start_z` is metadata only.
-
-### Seed NPZ (Geant4 → transport)
-
-| Key | Shape | Units |
-|-----|-------|-------|
-| `positions` | (N, 3) | m |
-| `velocities` | (N, 3) | m/s |
-| `gammas` | (N,) | — |
-| `charges` | (N,) | ±1 |
-| `momenta_mevc` | (N, 3) | MeV/c |
-| `start_z` | (N,) | m |
+Transport injects particles at the line entrance regardless of absolute `start_z`.
 
 ### Transported run directory
 
 ```text
 data/transport/run_<timestamp>/
 ├── transported_particles.npz
-├── metrics.json
-├── provenance.json
-├── beam_xy.png
-├── phase_space.png
-├── momentum_histogram.png
-├── beamline.png
-└── summary.txt
+└── topology.json
 ```
 
-NPZ fields include final `x`, `px`, `y`, `py`, `zeta`, `delta`, `state`, `alive_mask`, `at_element`, `p0c_eV`, `mass0_eV`, `q0`, `start_z`, and `metadata_json`.
+NPZ fields: `x`, `px`, `y`, `py`, `zeta`, `delta`, `state`, `p0c_eV`, `mass0_eV`, `q0`.
+
+`topology.json` is the instructions actually used (beamline + cuts + source). It is the study-facing record, not a provenance subsystem.
 
 ### Frozen public contracts
 
 | Contract | Owner |
 |----------|-------|
-| `SeedArrays` | `transport/io.py` |
-| `pipeline.run(...)` | `transport/pipeline.py` |
-| `TransportResult` | `transport/xsuite.py` |
-| `TransportMetrics` | `transport/analysis/metrics.py` |
-| Transported NPZ keys | `transport/xsuite.py` |
-| Experiment scripts | `experiments/transport/` |
-| Study runner | `transport/studies/runner.py` |
+| `Beamline` + `Transport` | `transport/interface.py` |
+| `load_topology` / `construct_beamline` / `inherit_particles` / `run` | `transport/interface.py` |
+| Default topology JSON | `transport/config.json` |
+| Transported NPZ keys | `Transport._write_output` |
+| `topology.json` | same run directory |
 
 ---
 
 ## Design principles
 
 1. **Geant4 owns production; Xsuite owns tracking.** Janus does not reimplement hadronic physics or standard magnet maps.
-2. **Experiments are Python, not YAML.** A study is a script that builds `xt.Line`, defines every scientific parameter, and calls `run`.
-3. **Studies tooling stays in Janus.** `transport/studies/` generates configuration sweeps and datasets; research campaigns belong in a future lab.
-4. **Thin boundary layer.** `SeedArrays` and `seeds_to_xparticles` bridge Geant4 units to Xsuite.
+2. **Five named stages.** Topology is data; construct, inherit, track, and write are separate methods so a future study can inherit once and loop the rest.
+3. **Thin inherit.** One ROOT file → three arrays. No seed cache, no public `SeedArrays`.
+4. **Studies are callers.** Parameter sweeps belong in scripts that use `Transport`, not in a `transport/studies/` package.
 5. **Generated data stays out of source trees.** Simulation products live under `data/`.
-6. **Analysis is offline and automatic.** Diagnostics read the NPZ written after tracking.
 
 ---
 
@@ -237,13 +209,10 @@ pip install -r requirements.txt
 # Collision (requires built Geant4 engine)
 python interactions/run.py
 
-# Transport — mock / synthetic seeds
-python -m transport.main --experiment drift
+# Transport (requires data/interactions/*/simulation.root)
+python transport/run.py
 
-# Transport — Geant4 seeds
-python -m transport.main --experiment geant4_antiproton
-
-# Tests
+# Tests (synthetic particles; no Geant4 required)
 pytest tests/transport/
 ```
 

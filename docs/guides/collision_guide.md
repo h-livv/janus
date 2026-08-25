@@ -145,7 +145,7 @@ Details: [collision validation](../validation/collision_validation.md).
 Once `data/interactions/*/simulation.root` exists:
 
 ```bash
-python -m transport.main --experiment geant4_antiproton
+python transport/run.py
 ```
 
-Or use mock / synthetic seeds with no Geant4 run — see [transport guide](transport_guide.md).
+Or set synthetic arrays on `Transport` with no Geant4 run — see [transport guide](transport_guide.md).

@@ -1,0 +1,14 @@
+{
+  "beamline": [
+    {"type": "Drift", "length": 5.0},
+    {"type": "Quadrupole", "length": 1.0, "k1": 0.5},
+    {"type": "Drift", "length": 2.0},
+    {"type": "Quadrupole", "length": 1.0, "k1": -0.5}
+  ],
+  "particle": "antiproton",
+  "count": 1000,
+  "momentum_slice": [3.48, 3.68],
+  "num_turns": 1,
+  "source": null,
+  "output_dir": "data/transport"
+}
