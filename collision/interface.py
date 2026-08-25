@@ -23,7 +23,7 @@ MACRO_PATH = ENGINE_DIR / "macros" / "run.mac"
 HARDCODED_H5_VAL = PROJECT_ROOT / "temp" / "validation.root"
 HARDCODED_H5_SIM = PROJECT_ROOT / "temp" / "simulation.root"
 
-OUTPUT_DIR = PROJECT_ROOT / "data" / "interactions"
+OUTPUT_DIR = PROJECT_ROOT / "data" / "collision"
 
 
 # =========================================================
@@ -527,7 +527,7 @@ class Simulation:
             import analyze
             analyze.generate_summary(new_val_path, run_folder)
             
-            print(f"[+] Run packaged successfully in: data/interactions/{run_name}/\n")
+            print(f"[+] Run packaged successfully in: data/collision/{run_name}/\n")
         else:
             print("[-] Warning: Expected output ROOT files not found. Data packaging skipped.\n")
 

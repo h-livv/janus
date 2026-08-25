@@ -18,11 +18,11 @@ def main():
     sim_path = args.sim_root
 
     if not val_path or not sim_path:
-        runs = glob.glob("data/interactions/run_*")
+        runs = glob.glob("data/collision/run_*")
         if not runs:
             runs = glob.glob("outputs/run_*")
         if not runs:
-            print("Fatal Error: No output directories found in data/interactions/ or outputs/ and no files provided.")
+            print("Fatal Error: No output directories found in data/collision/ or outputs/ and no files provided.")
             sys.exit(1)
         latest_run = max(runs, key=os.path.getmtime)
         val_path = val_path or os.path.join(latest_run, "validation.root")
@@ -39,7 +39,7 @@ def main():
         sys.exit(1)
 
     run_name = os.path.basename(os.path.dirname(val_path))
-    output_dir = os.path.join("interactions", "validation", "validation_outputs", run_name)
+    output_dir = os.path.join("collision", "validation", "validation_outputs", run_name)
     os.makedirs(output_dir, exist_ok=True)
 
     # Load validation data

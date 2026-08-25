@@ -13,7 +13,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def find_simulation_root(source: str | Path | None = None) -> Path:
-    """Return an explicit Seeds file, or the newest data/interactions/*/simulation.root."""
+    """Return an explicit Seeds file, or the newest data/collision/*/simulation.root."""
     if source:
         path = Path(source)
         if not path.is_absolute():
@@ -22,7 +22,7 @@ def find_simulation_root(source: str | Path | None = None) -> Path:
             raise FileNotFoundError(f"Seeds file not found: {path}")
         return path
 
-    outputs = _PROJECT_ROOT / "data" / "interactions"
+    outputs = _PROJECT_ROOT / "data" / "collision"
     if not outputs.is_dir():
         raise FileNotFoundError(f"No collision outputs at {outputs}")
 

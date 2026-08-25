@@ -13,6 +13,7 @@ import xpart as xp
 import xtrack as xt
 
 from transport.io import find_simulation_root, load_seeds
+from transport.plots import write_plots
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_CONFIG = Path(__file__).resolve().parent / "config.json"
@@ -194,6 +195,7 @@ class Transport:
         )
         topology_path = run_dir / "topology.json"
         topology_path.write_text(json.dumps(self._topology_record(), indent=2) + "\n", encoding="utf-8")
+        write_plots(npz_path)
         self.output_path = npz_path
         print(f"[Transport] Wrote {npz_path}")
         return npz_path

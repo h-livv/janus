@@ -28,7 +28,7 @@ Which parameters most strongly influence antiproton production yield, and can se
   Geant4 Engine (engines/geant4/)
        │
        ▼
-  interactions/  →  simulation.root (Seeds) + validation.root
+  collision/  →  simulation.root (Seeds) + validation.root
        │
        ▼
   transport/config.json  →  topology instructions
@@ -37,7 +37,7 @@ Which parameters most strongly influence antiproton production yield, and can se
   Transport: construct beamline → inherit particles → track → NPZ
        │
        ▼
-  data/transport/run_*/  (transported_particles.npz + topology.json)
+  data/transport/run_*/  (NPZ + topology.json + plots)
 ```
 ---
 
@@ -45,9 +45,9 @@ Which parameters most strongly influence antiproton production yield, and can se
 
 | Stage | Status |
 |-------|--------|
-| Geant4 target bombardment | Implemented (`engines/geant4/`, `interactions/`) |
-| Collision validation (Phases 1–3) | Implemented (`interactions/validation/validate.py`) |
-| Collision phenomenology (Phase 4) | Implemented (`interactions/validation/physical_validation.py`) |
+| Geant4 target bombardment | Implemented (`engines/geant4/`, `collision/`) |
+| Collision validation (Phases 1–3) | Implemented (`collision/validation/validate.py`) |
+| Collision phenomenology (Phase 4) | Implemented (`collision/validation/physical_validation.py`) |
 | ROOT → array inherit | Implemented (`transport/io.py`) |
 | Five-stage Xsuite transport | Implemented (`transport/interface.py`) |
 | Topology JSON (drift, quadrupole, bend) | Implemented (`transport/config.json`) |
@@ -64,13 +64,13 @@ Topology lives in `transport/config.json`. Entry is `python transport/run.py`.
 ```bash
 pip install -r requirements.txt
 
-# Requires data/interactions/*/simulation.root
+# Requires data/collision/*/simulation.root
 python transport/run.py
 ```
 
 Override fields in Python or edit the JSON. Full instructions: [docs/guides/transport_guide.md](docs/guides/transport_guide.md).
 
-Outputs land in `data/transport/run_<timestamp>/` (`transported_particles.npz`, `topology.json`).
+Outputs land in `data/transport/run_<timestamp>/` (`transported_particles.npz`, `topology.json`, diagnostic PNGs).
 
 
 ---
@@ -81,8 +81,8 @@ Outputs land in `data/transport/run_<timestamp>/` (`transported_particles.npz`, 
 **Collision** — Phases 1–3 check conservation laws on `validation.root`; Phase 4 plots emergent distributions from both ROOT files. See [docs/validation/collision_validation.md](docs/validation/collision_validation.md).
 
 ```bash
-python interactions/validation/validate.py
-python interactions/validation/physical_validation.py
+python collision/validation/validate.py
+python collision/validation/physical_validation.py
 ```
 
 **Transport** — Janus does not re-validate Xsuite element physics. It tests topology → construct → inherit → track → write:
@@ -108,8 +108,8 @@ janus/
 │   └── assets/
 ├── engines/
 │   └── geant4/                 # C++ Geant4 collision engine
-├── interactions/               # Run orchestration + collision validation
-│   ├── run.py                  # Entry: python interactions/run.py
+├── collision/               # Run orchestration + collision validation
+│   ├── run.py                  # Entry: python collision/run.py
 │   ├── run_batches.py          # Multi-batch runner
 │   ├── config.json             # Collision study parameters
 │   ├── interface.py            # Simulation interface (moves temp/ → data/)
@@ -121,9 +121,10 @@ janus/
 │   ├── interface.py            # Beamline + Transport (five stages)
 │   ├── io.py                   # One ROOT Seeds parse
 │   ├── run.py                  # load_topology(); run()
+│   ├── plots.py                # Diagnostic PNGs after a run
 │   └── config.json             # Default topology + cuts
 ├── data/                       # Generated artifacts (gitignored)
-│   ├── interactions/           # Packaged ROOT outputs
+│   ├── collision/           # Packaged ROOT outputs
 │   └── transport/              # Transport run outputs
 ├── tests/transport/
 └── requirements.txt

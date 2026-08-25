@@ -56,7 +56,7 @@ def test_load_topology_fills_beamline(tmp_path):
         "count": 7,
         "momentum_slice": [1.0, 2.0],
         "num_turns": 3,
-        "source": "data/interactions/example/simulation.root",
+        "source": "data/collision/example/simulation.root",
         "output_dir": "data/custom",
     }
     path = tmp_path / "topology.json"
@@ -149,6 +149,9 @@ def test_run_tracks_drift_and_writes_npz(tmp_path):
 
     assert transport.particles is not None
     assert np.isfinite(transport.particles.x[0])
+    run_dir = npz_path.parent
+    for name in ("beam_xy.png", "phase_space.png", "momentum_histogram.png", "beamline.png"):
+        assert (run_dir / name).exists()
 
 
 def test_species_and_count_selection(tmp_path):
