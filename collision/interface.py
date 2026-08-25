@@ -436,7 +436,7 @@ class Simulation:
             print("Launching Geant4 GUI...")
             
             cmd.append("--interactive")
-            subprocess.run(cmd, cwd=ENGINE_DIR / "build")
+            subprocess.run(cmd, cwd=ENGINE_DIR)
             return
 
         # --- AUTOMATED MODE ---
@@ -465,7 +465,7 @@ class Simulation:
 
         result = subprocess.run(
             cmd,
-            cwd=ENGINE_DIR / "build",
+            cwd=ENGINE_DIR,
             capture_output=True,
             text=True
         )
