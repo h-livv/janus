@@ -6,11 +6,11 @@
         "target_material": "G4_Ir",
         "target_width": "3.0 mm",
         "target_length": "55 mm",
-        "target_position": "0 0 -27.5 cm"
+        "target_position": "0 0 +25.0 cm"
     },
     "beam": {
         "particle": "proton",
-        "count": 1000000,
+        "count": 10000,
         "profile": "Gaussian",
         "radius": "1.0 mm",
         "sigma": "0.5 mm",

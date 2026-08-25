@@ -50,7 +50,7 @@ Which parameters most strongly influence antiproton production yield, and can se
 | Collision phenomenology (Phase 4) | Implemented (`collision/validation/physical_validation.py`) |
 | ROOT → array inherit | Implemented (`transport/io.py`) |
 | Five-stage Xsuite transport | Implemented (`transport/interface.py`) |
-| Topology JSON (drift, quadrupole, bend) | Implemented (`transport/config.json`) |
+| Topology JSON (drift, quadrupole, bend, aperture) | Implemented (`transport/config.json`) |
 | Magnetic horn via Xsuite field map | Not yet |
 | Cooling / trapping / optimization | Planned |
 

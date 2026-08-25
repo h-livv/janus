@@ -21,12 +21,12 @@ def _synthetic(n=1, x=0.001, px=0.0, py=0.0, pz=3580.0, charge=-1):
     return positions, momenta, charges
 
 
-def _ready(tmp_path, *, n=1, px=0.0, py=0.0, pz=3580.0, charge=-1):
+def _ready(tmp_path, *, n=1, x=0.001, px=0.0, py=0.0, pz=3580.0, charge=-1):
     transport = Transport()
     transport.output_dir = str(tmp_path)
     transport.beamline.elements = [{"type": "Drift", "length": 10.0}]
     transport.positions, transport.momenta_mevc, transport.charges = _synthetic(
-        n=n, px=px, py=py, pz=pz, charge=charge
+        n=n, x=x, px=px, py=py, pz=pz, charge=charge
     )
     return transport
 
@@ -55,6 +55,7 @@ def test_load_topology_fills_beamline(tmp_path):
         "particle": "proton",
         "count": 7,
         "momentum_slice": [1.0, 2.0],
+        "aperture_diameter": 0.05,
         "num_turns": 3,
         "source": "data/collision/example/simulation.root",
         "output_dir": "data/custom",
@@ -69,6 +70,7 @@ def test_load_topology_fills_beamline(tmp_path):
     assert transport.particle == "proton"
     assert transport.count == 7
     assert transport.momentum_slice == (1.0, 2.0)
+    assert transport.aperture_diameter == 0.05
     assert transport.num_turns == 3
     assert transport.source == config["source"]
     assert transport.output_dir == "data/custom"
@@ -80,6 +82,7 @@ def test_load_default_config():
     assert transport.beamline.elements[0]["type"] == "Drift"
     assert transport.particle == "antiproton"
     assert any(el["type"] == "Quadrupole" for el in transport.beamline.elements)
+    assert transport.aperture_diameter == 0.08
 
 
 def test_construct_beamline_types_and_lengths():
@@ -97,6 +100,33 @@ def test_construct_beamline_types_and_lengths():
     assert line.elements[1].k1 == 0.5
     assert isinstance(line.elements[2], xt.Bend)
     assert line.elements[2].angle == 0.01
+
+
+def test_aperture_diameter_inserts_circular_limits():
+    transport = Transport()
+    transport.beamline.elements = [
+        {"type": "Drift", "length": 5.0},
+        {"type": "Quadrupole", "length": 1.0, "k1": 0.5},
+    ]
+    transport.aperture_diameter = 0.08
+    line = transport.construct_beamline()
+    # Limit at entrance and after each topology element: 1 + 2*N.
+    assert len(line.elements) == 5
+    assert isinstance(line.elements[0], xt.LimitEllipse)
+    assert isinstance(line.elements[1], xt.Drift)
+    assert isinstance(line.elements[2], xt.LimitEllipse)
+    assert isinstance(line.elements[3], xt.Quadrupole)
+    assert isinstance(line.elements[4], xt.LimitEllipse)
+    radius = 0.04
+    assert line.elements[0].a == radius
+    assert line.elements[0].b == radius
+
+
+def test_aperture_stops_particles_outside_diameter(tmp_path):
+    transport = _ready(tmp_path, x=0.06)
+    transport.aperture_diameter = 0.04
+    transport.run()
+    assert int(transport.particles.state[0]) <= 0
 
 
 def test_construct_unknown_type_fails():

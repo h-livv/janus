@@ -53,6 +53,7 @@ class Transport:
         self.particle = "antiproton"
         self.count: Optional[int] = None
         self.momentum_slice = None
+        self.aperture_diameter = None
         self.num_turns = 1
         self.source = None
         self.output_dir = "data/transport"
@@ -85,6 +86,8 @@ class Transport:
         if "momentum_slice" in config:
             slice_ = config["momentum_slice"]
             self.momentum_slice = tuple(slice_) if slice_ is not None else None
+        if "aperture_diameter" in config:
+            self.aperture_diameter = config["aperture_diameter"]
         if "num_turns" in config:
             self.num_turns = int(config["num_turns"])
         if "source" in config:
@@ -96,9 +99,22 @@ class Transport:
         """Stage 2: topology → xt.Line."""
         if not self.beamline.elements:
             raise ValueError("beamline has no elements")
-        elements = [_element_from_spec(spec) for spec in self.beamline.elements]
+        elements = []
+        if self.aperture_diameter is not None:
+            elements.append(self._circular_aperture())
+        for spec in self.beamline.elements:
+            elements.append(_element_from_spec(spec))
+            if self.aperture_diameter is not None:
+                elements.append(self._circular_aperture())
         self.line = xt.Line(elements=elements)
         return self.line
+
+    def _circular_aperture(self) -> xt.LimitEllipse:
+        diameter = float(self.aperture_diameter)
+        if diameter <= 0:
+            raise ValueError("aperture_diameter must be positive")
+        radius = diameter / 2.0
+        return xt.LimitEllipse(a=radius, b=radius)
 
     def inherit_particles(self) -> None:
         """Stage 3: Geant4 Seeds → arrays. No-op if arrays are already set."""
@@ -209,6 +225,7 @@ class Transport:
             "particle": self.particle,
             "count": self.count,
             "momentum_slice": slice_,
+            "aperture_diameter": self.aperture_diameter,
             "num_turns": int(self.num_turns),
             "source": self.source,
             "output_dir": str(self.output_dir),

@@ -6,8 +6,9 @@
     {"type": "Quadrupole", "length": 1.0, "k1": -0.5}
   ],
   "particle": "antiproton",
-  "count": 1000,
+  "count": 10000,
   "momentum_slice": [3.48, 3.68],
+  "aperture_diameter": 0.04,
   "num_turns": 1,
   "source": null,
   "output_dir": "data/transport"
