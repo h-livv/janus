@@ -1,27 +1,14 @@
 # Janus
 
-> How do physical beamline parameters influence coupled high-energy particle simulations, and how can computational methods explore and optimize those systems?
+> A computational framework for studying how beamline parameters influence high-energy particle transport and production.
 
-Janus is the computational system built to investigate that question. It couples particle-interaction simulation with deterministic beam transport so that physical parameters can be changed and their effect on downstream beam behavior and particle production can be measured. The present case study is antiproton production from high-energy proton–target collisions.
-
-## Question
-
-The immediate instance of the question is antiproton production: how target, beam, and transport parameters affect yield and the distributions that leave the beamline.
-
-The aim is not only a single optimum. The work is meant to ask:
-
-- which parameters the coupled simulation is sensitive to
-- how the search space is structured
-- how physical parameters interact
-- what simulation-based optimization costs, and how different strategies behave
-
-The repository currently contains the simulation system they require.
+Janus couples Geant4 particle-interaction simulations with Xsuite beam transport to study how physical parameters affect downstream beam behavior.
 
 ## System
 
 ![Geant4 target bombardment in Janus](docs/assets/bombardment.png)
 
-The built case study is **26 GeV proton bombardment of a high-Z target**. [`collision/config.json`](collision/config.json) defaults to a 26 GeV proton beam and an iridium target (`G4_Ir`). Geant4 simulates the target interaction. Xsuite transports the resulting particles through the beamline in [`transport/config.json`](transport/config.json).
+The current case study is 26 GeV proton bombardment of a high-Z target, with antiproton production as the primary observable.
 
 ```text
 Geant4 (engines/geant4/, collision/)
@@ -37,8 +24,6 @@ NPZ outputs / diagnostics  (data/transport/run_*/)
 
 Geant4 supplies the stochastic interaction and production step. ROOT `Seeds` carry that particle data into transport. Xsuite tracks the beam. The NPZ files and diagnostic plots are the observables the research question will use.
 
-Cooling, deceleration, trapping, magnetic-horn field maps, and optimization loops are not part of the system yet.
-
 | What                               | Status                                                                   |
 | ---------------------------------- | ------------------------------------------------------------------------ |
 | Geant4 target bombardment          | Implemented (`engines/geant4/`, `collision/`)                            |
@@ -47,8 +32,6 @@ Cooling, deceleration, trapping, magnetic-horn field maps, and optimization loop
 | ROOT → array inherit               | Implemented (`transport/io.py`)                                          |
 | Five-stage Xsuite transport        | Implemented (`transport/interface.py`)                                   |
 | Configurable beamline topology     | Implemented (`transport/config.json`: drift, quadrupole, bend, aperture) |
-| Magnetic horn via Xsuite field map | Not yet                                                                  |
-| Optimization studies               | Not yet                                                                  |
 
 Data contracts: [Architecture](docs/ARCHITECTURE.md). Physical models: [Physics](docs/PHYSICS.md).
 
@@ -87,8 +70,6 @@ pytest tests/transport/
 Transport writes `data/transport/run_<timestamp>/` (`transported_particles.npz`, `topology.json`, diagnostic PNGs).
 
 ## Next
-
-The next computational pieces are more realistic beamlines, more observables, and a tighter Geant4–Xsuite coupling. Those exist so the question above can be asked on a more faithful system: sensitivity, parameter-space structure, and simulation-based optimization.
 
 [Roadmap](docs/Janus_Architectural_Roadmap.md).
 
