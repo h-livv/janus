@@ -84,3 +84,6 @@ Collision uses [Geant4](https://geant4.web.cern.ch/).
 Transport uses [Xsuite](https://xsuite.readthedocs.io/):
 
 > G. Iadarola, R. De Maria, S. Łopaciuk, A. Abramov, X. Buffat, D. Demetriadou, L. Deniau, P. Hermes, P. Kicsiny, P. Kruyt, A. Latina, L. Mether, K. Paraschou, G. Sterbini, F. F. Van Der Veken, P. Belanger, P. Niedermayer, D. Di Croce, T. Pieloni, L. Van Riesen-Haupt, M. Seidel. [“Xsuite: An Integrated Beam Physics Simulation Framework,”](https://inspirehep.net/literature/2705250) JACoW HB2023 (2024), TUA2I1.
+
+## Status (as of 2026-09-06)
+Archived. Computational framework coupling particle-interaction simulation in Geant4 with beam transport using xsuite.
