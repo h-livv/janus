@@ -2,13 +2,14 @@
 
 > A computational framework for studying how beamline parameters influence high-energy particle transport and production.
 
-Janus couples Geant4 particle-interaction simulations with Xsuite beam transport to study how physical parameters affect downstream beam behavior.
+> **Status: Archived (September 2026).**
+> Janus is no longer under active development. It coupled Geant4 particle-interaction simulations with Xsuite beam transport to study how physical parameters affect downstream beam behavior.
 
 ## System
 
 ![Geant4 target bombardment in Janus](docs/assets/bombardment.png)
 
-The current case study is 26 GeV proton bombardment of a high-Z target, with antiproton production as the primary observable.
+The case study considered 26 GeV proton bombardment of a high-Z target, with antiproton production as the primary observable.
 
 ```text
 Geant4 (engines/geant4/, collision/)
@@ -22,7 +23,7 @@ particle tracking
 NPZ outputs / diagnostics  (data/transport/run_*/)
 ```
 
-Geant4 supplies the stochastic interaction and production step. ROOT `Seeds` carry that particle data into transport. Xsuite tracks the beam. The NPZ files and diagnostic plots are the observables the research question will use.
+Geant4 supplies the stochastic interaction and production step. ROOT `Seeds` carry that particle data into transport. Xsuite tracks the beam. The resulting NPZ files and diagnostic plots serve as the primary observables.
 
 | What                               | Status                                                                   |
 | ---------------------------------- | ------------------------------------------------------------------------ |
@@ -34,6 +35,8 @@ Geant4 supplies the stochastic interaction and production step. ROOT `Seeds` car
 | Configurable beamline topology     | Implemented (`transport/config.json`: drift, quadrupole, bend, aperture) |
 
 Data contracts: [Architecture](docs/ARCHITECTURE.md). Physical models: [Physics](docs/PHYSICS.md).
+
+---
 
 ### Validation
 
@@ -51,8 +54,9 @@ Transport tests cover topology → construct → inherit → track → write. Th
 ```bash
 pytest tests/transport/
 ```
+---
 
-### Running
+### Reproducing the Pipeline
 
 Collision needs a built Janus Geant4 engine ([installation](docs/guides/geant4_installation.md)). Transport needs a `data/collision/*/simulation.root` from a collision run. Transport tests need only `pip install -r requirements.txt`.
 
@@ -69,9 +73,7 @@ pytest tests/transport/
 
 Transport writes `data/transport/run_<timestamp>/` (`transported_particles.npz`, `topology.json`, diagnostic PNGs).
 
-## Next
-
-[Roadmap](docs/Janus_Architectural_Roadmap.md).
+---
 
 ## Acknowledgements
 
@@ -85,5 +87,4 @@ Transport uses [Xsuite](https://xsuite.readthedocs.io/):
 
 > G. Iadarola, R. De Maria, S. Łopaciuk, A. Abramov, X. Buffat, D. Demetriadou, L. Deniau, P. Hermes, P. Kicsiny, P. Kruyt, A. Latina, L. Mether, K. Paraschou, G. Sterbini, F. F. Van Der Veken, P. Belanger, P. Niedermayer, D. Di Croce, T. Pieloni, L. Van Riesen-Haupt, M. Seidel. [“Xsuite: An Integrated Beam Physics Simulation Framework,”](https://inspirehep.net/literature/2705250) JACoW HB2023 (2024), TUA2I1.
 
-## Status (as of 2026-09-06)
-Archived. Computational framework coupling particle-interaction simulation in Geant4 with beam transport using xsuite.
+---
