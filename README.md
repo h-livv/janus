@@ -1,9 +1,12 @@
 # Janus
 
-> A computational framework for studying how beamline parameters influence high-energy particle transport and production.
+### A computational framework for studying how beamline and collision parameters affect high-energy particle transport and production.
 
-> **Status: Archived (September 2026).**
-> Janus is no longer under active development. It coupled Geant4 particle-interaction simulations with Xsuite beam transport to study how physical parameters affect downstream beam behavior.
+Janus couples Geant4 particle-interaction simulations with Xsuite beam
+transport, connecting stochastic particle production at a target to downstream
+beam dynamics.
+
+> Status: Archived
 
 ## System
 
@@ -25,14 +28,14 @@ NPZ outputs / diagnostics  (data/transport/run_*/)
 
 Geant4 supplies the stochastic interaction and production step. ROOT `Seeds` carry that particle data into transport. Xsuite tracks the beam. The resulting NPZ files and diagnostic plots serve as the primary observables.
 
-| What                               | Status                                                                   |
+## Components
+
+| Component                          | Purpose                                                                  |
 | ---------------------------------- | ------------------------------------------------------------------------ |
-| Geant4 target bombardment          | Implemented (`engines/geant4/`, `collision/`)                            |
-| Collision validation (Phases 1–3)  | Implemented (`collision/validation/validate.py`)                         |
-| Collision phenomenology (Phase 4)  | Implemented (`collision/validation/physical_validation.py`)              |
-| ROOT → array inherit               | Implemented (`transport/io.py`)                                          |
-| Five-stage Xsuite transport        | Implemented (`transport/interface.py`)                                   |
-| Configurable beamline topology     | Implemented (`transport/config.json`: drift, quadrupole, bend, aperture) |
+|Geant4          | Target bombardment and particle production                          |
+| ROOT                | Structured collision and particle data                                    |
+| Xsuite        | Beam transport and tracking                            |
+| Janus     | Configuration, data transfer, orchestration, and analysis) |
 
 Data contracts: [Architecture](docs/ARCHITECTURE.md). Physical models: [Physics](docs/PHYSICS.md).
 
