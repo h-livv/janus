@@ -6,7 +6,9 @@ Janus couples Geant4 particle-interaction simulations with Xsuite beam
 transport, connecting stochastic particle production at a target to downstream
 beam dynamics.
 
-> Status: Archived
+> **Status:** Not currently active. Janus grew out of an exploration of
+> Geant4 particle production and Xsuite beam transport. I’m keeping the code
+> and notes here in case I return to it.
 
 ## System
 
@@ -39,8 +41,6 @@ Geant4 supplies the stochastic interaction and production step. ROOT `Seeds` car
 
 Data contracts: [Architecture](docs/ARCHITECTURE.md). Physical models: [Physics](docs/PHYSICS.md).
 
----
-
 ### Validation
 
 Collision and transport are checked separately. Janus does not revalidate Geant4 hadronic models or Xsuite element physics.
@@ -57,7 +57,6 @@ Transport tests cover topology → construct → inherit → track → write. Th
 ```bash
 pytest tests/transport/
 ```
----
 
 ### Reproducing the Pipeline
 
@@ -76,7 +75,6 @@ pytest tests/transport/
 
 Transport writes `data/transport/run_<timestamp>/` (`transported_particles.npz`, `topology.json`, diagnostic PNGs).
 
----
 
 ## Acknowledgements
 
@@ -90,4 +88,8 @@ Transport uses [Xsuite](https://xsuite.readthedocs.io/):
 
 > G. Iadarola, R. De Maria, S. Łopaciuk, A. Abramov, X. Buffat, D. Demetriadou, L. Deniau, P. Hermes, P. Kicsiny, P. Kruyt, A. Latina, L. Mether, K. Paraschou, G. Sterbini, F. F. Van Der Veken, P. Belanger, P. Niedermayer, D. Di Croce, T. Pieloni, L. Van Riesen-Haupt, M. Seidel. [“Xsuite: An Integrated Beam Physics Simulation Framework,”](https://inspirehep.net/literature/2705250) JACoW HB2023 (2024), TUA2I1.
 
----
+## Notes
+
+Janus connects Geant4 output to Xsuite transport. The transport path has tests, while collision
+validation is covered by scripts rather than a pytest suite. Running the full
+pipeline also requires a separate Geant4 setup.
