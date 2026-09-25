@@ -66,8 +66,8 @@ class Environment:
         self.target_shape = "Cylinder"   # "Box", "Cylinder", or "Sphere"
         self.target_material = "G4_Ir"
         self.target_width = "3.0 mm"     # Acts as diameter for Cylinder
-        self.target_length = "55.0 cm"   # The length of the target along Z
-        self.target_position = "0 0 -27.5 cm"
+        self.target_length = "55.0 mm"   # The length of the target along Z
+        self.target_position = "0 0 -27.5 mm"
 
 # =========================================================
 # Simulation Engine

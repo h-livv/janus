@@ -1,10 +1,8 @@
 # Janus
 
-### A computational framework for studying how beamline and collision parameters affect high-energy particle transport and production.
+### A personal exploration of a Geant4 target simulation handed to Xsuite for tracking.
 
-Janus couples Geant4 particle-interaction simulations with Xsuite beam
-transport, connecting stochastic particle production at a target to downstream
-beam dynamics.
+Janus is the configuration and the file passed between a Geant4 target run and an Xsuite tracking run. Geant4 handles the interactions. Xsuite handles the tracking.
 
 > **Status:** Not currently active. Janus grew out of an exploration of
 > Geant4 particle production and Xsuite beam transport. I’m keeping the code
@@ -28,7 +26,7 @@ particle tracking
 NPZ outputs / diagnostics  (data/transport/run_*/)
 ```
 
-Geant4 supplies the stochastic interaction and production step. ROOT `Seeds` carry that particle data into transport. Xsuite tracks the beam. The resulting NPZ files and diagnostic plots serve as the primary observables.
+Geant4 supplies the interaction. ROOT `Seeds` carry that particle data into transport. Xsuite tracks the beam. The NPZ file and diagnostic plots are the output of that pass.
 
 ## Components
 
@@ -37,15 +35,15 @@ Geant4 supplies the stochastic interaction and production step. ROOT `Seeds` car
 |Geant4          | Target bombardment and particle production                          |
 | ROOT                | Structured collision and particle data                                    |
 | Xsuite        | Beam transport and tracking                            |
-| Janus     | Configuration, data transfer, orchestration, and analysis) |
+| Janus     | Configuration and the handoff between the two runs |
 
-Data contracts: [Architecture](docs/ARCHITECTURE.md). Physical models: [Physics](docs/PHYSICS.md).
+Run notes: [collision guide](docs/guides/collision_guide.md), [transport guide](docs/guides/transport_guide.md). [Architecture](docs/ARCHITECTURE.md), [Physics](docs/PHYSICS.md), and the [roadmap](docs/Janus_Architectural_Roadmap.md) describe a larger program than the code implements.
 
 ### Validation
 
 Collision and transport are checked separately. Janus does not revalidate Geant4 hadronic models or Xsuite element physics.
 
-Collision Phases 1–3 test conservation laws on `validation.root`; Phase 4 plots distributions from both ROOT files. These scripts need `awkward` and `particle`, which are not all in `requirements.txt`. [Collision validation](docs/validation/collision_validation.md).
+`validate.py` checks charge, baryon number, and energy–momentum balance on `validation.root`. The Geant4 app adjusts the recorded residual nucleus so that balance holds before the script runs. `physical_validation.py` plots distributions from both ROOT files. These scripts need `awkward` and `particle`, which are not all in `requirements.txt`. [Collision validation](docs/validation/collision_validation.md).
 
 ```bash
 python collision/validation/validate.py
