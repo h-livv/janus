@@ -145,7 +145,7 @@ Details: [collision validation](../validation/collision_validation.md).
 Once `data/collision/*/simulation.root` exists:
 
 ```bash
-python transport/run.py
+python transport/main.py --experiment transport/experiment/configs/dipole.yaml
 ```
 
-Or set synthetic arrays on `Transport` with no Geant4 run — see [transport guide](transport_guide.md).
+The archived handwritten transport cases are documented in the [transport guide](transport_guide.md). Use a configuration that selects a Geant4 ROOT source; analytical and Gaussian-beam cases can run without collision output.

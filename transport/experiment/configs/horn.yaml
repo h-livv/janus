@@ -1,0 +1,31 @@
+experiment:
+  name: horn_level1
+  level: 1
+  case: horn
+  output_dir: transport/validation/outputs
+
+particle_source:
+  type: mock
+  species: antiproton
+  # Must sit in the annulus inner_radius < r < outer_radius (B=0 in the bore).
+  position: [0.05, 0.0, 0.0]
+  velocity: [0.0, 0.0, 299492818.0]
+  n_particles: 1
+
+lattice:
+  z_start: 0.0
+  elements:
+    # Mild kick so the constant-radius analytical impulse remains accurate.
+    - {type: horn, length: 1.0, current: 1000.0, inner_radius: 0.015, outer_radius: 0.10}
+
+numerical:
+  dt: 1.0e-10
+  max_steps: 500
+  max_steps_conv: 200
+  convergence: {enabled: true, mode: self, num_points: 6, refinement_ratio: 2.0}
+  solver: boris
+
+validation:
+  pass_criteria: all_must_pass
+
+outputs: {report: true, json: true, csv: true, manifest: true, plots: true, visualization: false}
