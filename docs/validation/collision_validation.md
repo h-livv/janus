@@ -125,7 +125,7 @@ Illustrative snapshots (from an earlier 100k-event study) are also kept under `d
 After Phases 1–3 pass (and Phase 4 looks sensible), run transport:
 
 ```bash
-python transport/run.py
+python transport/main.py --experiment transport/experiment/configs/dipole.yaml
 ```
 
-Transport reads **`simulation.root` / `Seeds`** only (via `transport/io.py`). Momentum and species selection are `Transport` / `config.json` fields — see [transport guide](../guides/transport_guide.md).
+Transport reads the **`Seeds`** tree from its configured ROOT source (via `transport/io/data_io.py`); the YAML experiment defines the particle selection and lattice. See the [transport guide](../guides/transport_guide.md).

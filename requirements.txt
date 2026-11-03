@@ -1,5 +1,15 @@
-xsuite>=0.57.0
+# Core transport and report generation
 numpy>=1.24
-uproot>=5.0
 matplotlib>=3.7
+PyYAML>=6.0
+uproot>=5.0
+
+# Collision validation and analysis
+awkward>=2.0
+particle>=0.23
+
+# Optional: interactive transport visualization (requires a GUI backend)
+vispy>=0.14
+
+# Optional: run tests / validation checks
 pytest>=8.0
