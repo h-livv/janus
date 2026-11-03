@@ -1,10 +1,12 @@
 # Janus
 
-Janus is a from-scratch particle-production and beam-transport research code. It combines a Geant4 target simulation with a handwritten relativistic Boris pusher and magnetic-lattice model.
+Janus is a from-scratch particle-production and beam-transport research code inspired by the antimatter production pipeline. It focuses on modeling particle production at a target and the subsequent transport of charged particles through magnetic beamlines.
 
 > **Status:** Archived research snapshot. The repository contains the latest handwritten transport implementation from the project's history, its validation framework, and archived validation figures. No further development is planned.
 
 ## What Janus implements
+
+![Proton bombardment of a target in Janus](docs/assets/bombardment.png)
 
 - **Collision:** a C++ Geant4 engine simulates proton bombardment of a high-Z target and records secondary-particle phase space.
 - **Transport:** Python code advances charged particles under the relativistic Lorentz force using a staggered relativistic Boris scheme. Janus defines drift, dipole, quadrupole, and magnetic-horn fields and aperture losses.
